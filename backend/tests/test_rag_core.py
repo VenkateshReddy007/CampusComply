@@ -204,10 +204,10 @@ def test_generation_error_is_not_returned_as_an_answer() -> None:
         chunks=(TextChunk(page=7, text="retrieved evidence passage", source_name="synthetic.pdf"),),
         vectors=np.array([[1.0, 0.0]], dtype=np.float32),
     )
-    embedder = FakeEmbedder({"question": [1.0, 0.0]})
+    embedder = FakeEmbedder({"campus policy question": [1.0, 0.0]})
 
     result = answer(
-        "question",
+        "campus policy question",
         knowledge_base,
         embedder,
         FailingGenerator(),
@@ -236,9 +236,9 @@ def test_answer_keeps_only_a_response_with_a_retrieved_source_citation() -> None
         vectors=np.array([[1.0, 0.0]], dtype=np.float32),
     )
     result = answer(
-        "question",
+        "campus policy question",
         knowledge_base,
-        FakeEmbedder({"question": [1.0, 0.0]}),
+        FakeEmbedder({"campus policy question": [1.0, 0.0]}),
         CitingGenerator(),
         RAGSettings(top_k=1),
     )
@@ -250,8 +250,7 @@ def test_answer_keeps_only_a_response_with_a_retrieved_source_citation() -> None
 def test_answer_abstains_for_out_of_scope_topics() -> None:
     class OutOfScopeGenerator:
         def generate(self, prompt, **kwargs):
-            assert "campus compliance questions" in kwargs["system_instruction"]
-            return "This assistant only answers campus compliance questions supported by the indexed documents."
+            raise AssertionError("Off-topic requests must not call the model.")
 
     knowledge_base = KnowledgeBase(
         name="synthetic-rules.pdf",
@@ -264,7 +263,8 @@ def test_answer_abstains_for_out_of_scope_topics() -> None:
         OutOfScopeGenerator(), RAGSettings(top_k=1),
     )
     assert result.status is AnswerStatus.ABSTAINED
-    assert result.answer == "This assistant only answers campus compliance questions supported by the indexed documents."
+    assert result.answer == "I can't answer that. I can help with campus or education questions supported by the indexed documents."
+    assert result.sources == ()
 
 
 def test_uncited_generation_is_rejected_as_an_answer() -> None:
@@ -278,9 +278,9 @@ def test_uncited_generation_is_rejected_as_an_answer() -> None:
         vectors=np.array([[1.0, 0.0]], dtype=np.float32),
     )
     result = answer(
-        "question",
+        "campus policy question",
         knowledge_base,
-        FakeEmbedder({"question": [1.0, 0.0]}),
+        FakeEmbedder({"campus policy question": [1.0, 0.0]}),
         UncitedGenerator(),
         RAGSettings(top_k=1),
     )
@@ -302,9 +302,9 @@ def test_answer_rejects_citations_that_do_not_match_retrieved_sources() -> None:
         vectors=np.array([[1.0, 0.0]], dtype=np.float32),
     )
     result = answer(
-        "question",
+        "campus policy question",
         knowledge_base,
-        FakeEmbedder({"question": [1.0, 0.0]}),
+        FakeEmbedder({"campus policy question": [1.0, 0.0]}),
         MixedCitingGenerator(),
         RAGSettings(top_k=1),
     )
@@ -326,9 +326,9 @@ def test_relevance_threshold_abstains_without_calling_generator() -> None:
         vectors=np.array([[0.0, 1.0]], dtype=np.float32),
     )
     result = answer(
-        "question",
+        "campus policy question",
         knowledge_base,
-        FakeEmbedder({"question": [1.0, 0.0]}),
+        FakeEmbedder({"campus policy question": [1.0, 0.0]}),
         UnexpectedGenerator(),
         RAGSettings(top_k=3, relevance_threshold=0.5),
     )

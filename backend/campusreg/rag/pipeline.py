@@ -24,6 +24,7 @@ from campusreg.rag.models import (
     RetrievedSource,
 )
 from campusreg.rag.retrieval import build_knowledge_base, retrieve, retrieve_configured
+from campusreg.rag.scope import is_campus_education_question
 from campusreg.storage.models import DocumentRecord, IngestionResult, IngestionStatus
 from campusreg.storage.sqlite_store import SQLiteDocumentStore
 
@@ -37,7 +38,16 @@ questions outside that scope, reply exactly: "This assistant only answers
 campus compliance questions supported by the indexed documents." Do not add
 general knowledge or legal advice. Keep the answer concise."""
 
-OUT_OF_SCOPE_ANSWER = "This assistant only answers campus compliance questions supported by the indexed documents."
+OUT_OF_SCOPE_ANSWER = "I can't answer that. I can help with campus or education questions supported by the indexed documents."
+
+
+def _out_of_scope_result(retrieval_query: str) -> AnswerResult:
+    return AnswerResult(
+        status=AnswerStatus.ABSTAINED,
+        answer=OUT_OF_SCOPE_ANSWER,
+        sources=(),
+        retrieval_query=retrieval_query,
+    )
 
 
 def answer(
@@ -54,6 +64,11 @@ def answer(
 
     selected = settings or RAGSettings.baseline()
     search_query = retrieval_query or question
+    if not (
+        is_campus_education_question(question)
+        or is_campus_education_question(search_query)
+    ):
+        return _out_of_scope_result(search_query)
     found = tuple(retrieve_configured(search_query, knowledge_base, embedder, selected))
     gate_decision = evidence_gate.evaluate(found, selected) if evidence_gate is not None else None
     if gate_decision is not None and not gate_decision.accepted:
@@ -163,6 +178,9 @@ class RAGEngine:
         return retrieve_configured(question, knowledge_base, self.embedder, self.settings)
 
     def answer(self, question: str, *, retrieval_query: str | None = None) -> AnswerResult:
+        search_query = retrieval_query or question
+        if not (is_campus_education_question(question) or is_campus_education_question(search_query)):
+            return _out_of_scope_result(search_query)
         knowledge_base = self._require_knowledge_base()
         return answer(
             question,
@@ -231,6 +249,9 @@ class MultiDocumentRAGEngine:
         return retrieve_configured(question, self._load_knowledge_base(), self.embedder, self.settings)
 
     def answer(self, question: str, *, retrieval_query: str | None = None) -> AnswerResult:
+        search_query = retrieval_query or question
+        if not (is_campus_education_question(question) or is_campus_education_question(search_query)):
+            return _out_of_scope_result(search_query)
         return answer(
             question,
             self._load_knowledge_base(),

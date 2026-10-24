@@ -143,7 +143,7 @@ def test_unsupported_question_abstains_and_conflict_endpoint_exposes_two_real_fi
     unsupported = client.post("/api/questions", json={"question": "SYNTHETIC astronomy galaxy facts"})
     assert unsupported.status_code == 200
     assert unsupported.json()["status"] == "abstained"
-    assert unsupported.json()["answer"] == "The answer could not be found in the document."
+    assert unsupported.json()["answer"] == "I can't answer that. I can help with campus or education questions supported by the indexed documents."
     assert unsupported.json()["supporting_passages"] == []
 
     response = client.get("/api/conflicts")
@@ -155,6 +155,37 @@ def test_unsupported_question_abstains_and_conflict_endpoint_exposes_two_real_fi
     assert "SYNTHETIC FIXTURE" in report["passage_a"]["text"]
     assert report["human_review_required"] is True
     assert response.json()["authority_decided"] is False
+
+
+def test_off_topic_question_is_refused_without_documents_or_model_key(tmp_path: Path, monkeypatch) -> None:
+    for name in ("GOOGLE_API_KEY", "GEMMA_API_KEY", "gemma_API_Key"):
+        monkeypatch.delenv(name, raising=False)
+    services = make_services(tmp_path, requires_api_key=True)
+    client = TestClient(create_app(services))
+
+    response = client.post("/api/questions", json={"question": "What is the weather in Paris?"})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "abstained"
+    assert response.json()["answer"] == "I can't answer that. I can help with campus or education questions supported by the indexed documents."
+    assert response.json()["supporting_passages"] == []
+    assert services.engine.generator.prompts == []
+
+    conversation_id = client.post("/api/conversations").json()["conversation_id"]
+    conversation_response = client.post(
+        f"/api/conversations/{conversation_id}/questions",
+        json={"question": "Write a Python script that sorts a list."},
+    )
+    assert conversation_response.status_code == 200
+    assert conversation_response.json()["status"] == "abstained"
+    assert conversation_response.json()["answer"] == response.json()["answer"]
+    assert services.engine.generator.prompts == []
+
+    missing_conversation = client.post(
+        "/api/conversations/not-a-conversation/questions",
+        json={"question": "What is the weather in Paris?"},
+    )
+    assert missing_conversation.status_code == 404
 
 
 def test_conversations_are_isolated_and_can_be_cleared(tmp_path: Path) -> None:

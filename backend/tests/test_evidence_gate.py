@@ -92,7 +92,7 @@ def test_pipeline_abstains_before_generation_when_gate_rejects() -> None:
 
     generator = NeverCalledGenerator()
     result = answer(
-        "SYNTHETIC TEST FIXTURE question",
+        "SYNTHETIC TEST FIXTURE campus policy question",
         kb,
         FakeEmbedder(),
         generator,

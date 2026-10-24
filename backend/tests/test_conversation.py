@@ -47,11 +47,18 @@ def _service(rewriter: FakeRewriter | None = None):
     return store, answerer, ConversationRAGService(store, answerer, rewriter)
 
 
+def test_follow_up_detection_does_not_match_an_embedded_pronoun() -> None:
+    from campusreg.rag.conversation import requires_query_rewrite
+
+    assert requires_query_rewrite("Write a Python script that sorts a list.") is False
+    assert requires_query_rewrite("What about the deadline?") is True
+
+
 def test_follow_up_rewrites_and_retrieves_again_storing_audit_fields() -> None:
     rewriter = FakeRewriter(["SYNTHETIC TEST FIXTURE registration deadline"])
     store, answerer, service = _service(rewriter)
     conversation_id = service.create_conversation()
-    service.ask(conversation_id, "SYNTHETIC TEST FIXTURE When is registration?")
+    service.ask(conversation_id, "SYNTHETIC TEST FIXTURE When is campus registration?")
 
     turn = service.ask(conversation_id, "What about the deadline?")
 
@@ -70,7 +77,7 @@ def test_ambiguous_follow_up_abstains_without_retrieval() -> None:
     rewriter = FakeRewriter([None])
     _, answerer, service = _service(rewriter)
     conversation_id = service.create_conversation()
-    service.ask(conversation_id, "SYNTHETIC TEST FIXTURE ask about registration")
+    service.ask(conversation_id, "SYNTHETIC TEST FIXTURE ask about campus registration")
 
     turn = service.ask(conversation_id, "What about it?")
 
@@ -108,7 +115,7 @@ def test_topic_change_does_not_carry_prior_topic_into_query() -> None:
     rewriter = FakeRewriter([])
     _, answerer, service = _service(rewriter)
     conversation_id = service.create_conversation()
-    service.ask(conversation_id, "SYNTHETIC TEST FIXTURE registration deadline?")
+    service.ask(conversation_id, "SYNTHETIC TEST FIXTURE campus registration deadline?")
 
     turn = service.ask(conversation_id, "SYNTHETIC TEST FIXTURE Explain the library opening hours.")
 
@@ -122,7 +129,7 @@ def test_conversation_isolation_clear_and_delete() -> None:
     store, _, service = _service(rewriter)
     first = service.create_conversation()
     second = service.create_conversation()
-    service.ask(first, "SYNTHETIC TEST FIXTURE registration policy")
+    service.ask(first, "SYNTHETIC TEST FIXTURE campus registration policy")
 
     isolated_follow_up = service.ask(second, "What about it?")
     assert isolated_follow_up.result.status is AnswerStatus.ABSTAINED
@@ -145,7 +152,7 @@ def test_unanswerable_follow_up_remains_abstained_after_fresh_retrieval() -> Non
         sources=(),
     )
     conversation_id = service.create_conversation()
-    service.ask(conversation_id, "SYNTHETIC TEST FIXTURE Ask about an available policy")
+    service.ask(conversation_id, "SYNTHETIC TEST FIXTURE Ask about an available campus policy")
 
     turn = service.ask(conversation_id, "What about the missing detail?")
 
@@ -163,7 +170,7 @@ def test_answer_generation_exception_is_stored_as_structured_failure() -> None:
     service = ConversationRAGService(store, BrokenAnswerer(), None)
     conversation_id = service.create_conversation()
 
-    turn = service.ask(conversation_id, "SYNTHETIC TEST FIXTURE standalone question")
+    turn = service.ask(conversation_id, "SYNTHETIC TEST FIXTURE campus standalone question")
 
     assert turn.result.status is AnswerStatus.GENERATION_ERROR
     assert turn.result.answer is None
@@ -181,7 +188,7 @@ def test_history_sent_to_rewriter_is_bounded_and_drops_evidence_sources() -> Non
     )
     conversation_id = service.create_conversation()
     store.append_conversation_message(
-        conversation_id, role="user", content="SYNTHETIC TEST FIXTURE old long context " * 5
+        conversation_id, role="user", content="SYNTHETIC TEST FIXTURE old campus rule context " * 5
     )
     store.append_conversation_message(
         conversation_id, role="assistant", content="SYNTHETIC TEST FIXTURE prior answer",
@@ -210,7 +217,7 @@ def test_evaluation_runner_uses_conversation_service_for_follow_up(tmp_path) -> 
         expected_conflict=False,
         split="development",
         conversation_context=(
-            ConversationTurn("user", "SYNTHETIC TEST FIXTURE ask about registration"),
+            ConversationTurn("user", "SYNTHETIC TEST FIXTURE ask about campus registration"),
             ConversationTurn("assistant", "SYNTHETIC TEST FIXTURE prior assistant answer"),
         ),
     )

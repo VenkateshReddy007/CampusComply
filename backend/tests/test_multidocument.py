@@ -135,7 +135,7 @@ def test_two_synthetic_pdfs_retrieve_overlapping_topics_with_exact_citations(tmp
         "synthetic-beta.pdf",
     ]
 
-    result = engine.answer("sharedtopic question")
+    result = engine.answer("campus sharedtopic question")
 
     assert result.status is AnswerStatus.ANSWERED
     relevant_sources = [source for source in result.sources if "sharedtopic" in source.text.lower()]

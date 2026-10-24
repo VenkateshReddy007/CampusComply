@@ -11,6 +11,7 @@ from campusreg.config import RAGSettings
 from campusreg.rag.errors import GenerationError
 from campusreg.rag.generation import TextGenerator, generate
 from campusreg.rag.models import AnswerResult, AnswerStatus, ErrorInfo, RetrievedSource
+from campusreg.rag.scope import is_campus_education_question
 from campusreg.storage.models import ConversationMessage
 from campusreg.storage.sqlite_store import SQLiteDocumentStore
 
@@ -22,11 +23,10 @@ QUERY_REWRITE_SYSTEM = (
     "Otherwise return only the rewritten question."
 )
 FOLLOW_UP_PATTERNS = (
-    re.compile(r"\bwhat\s+about\b", re.I),
-    re.compile(r"\bhow\s+about\b", re.I),
-    re.compile(r"\b(and\s+)?(it|that|those|them|there|same)\b", re.I),
-    re.compile(r"\bdoes\s+that\b|\bwould\s+that\b|\bwhat\s+if\s+it\b", re.I),
-    re.compile(r"\bthen\s+what\b|\bwhat\s+about\s+the\b", re.I),
+    re.compile(r"^\s*(?:what|how)\s+about\b", re.I),
+    re.compile(r"^\s*(?:(?:and|but|also|then)\s+)?(?:it|this|that|those|them|there|same)\b", re.I),
+    re.compile(r"^\s*(?:does\s+that|would\s+that|what\s+if\s+it)\b", re.I),
+    re.compile(r"^\s*then\s+what\b", re.I),
 )
 
 
@@ -140,6 +140,15 @@ class ConversationRAGService:
     def clear_conversation(self, conversation_id: str) -> bool:
         return self.store.clear_conversation(conversation_id)
 
+    def is_in_scope(self, conversation_id: str, question: str) -> bool:
+        """Check the question plus context-only references in prior user turns."""
+
+        history = self.store.list_conversation_messages(conversation_id)
+        return is_campus_education_question(
+            question,
+            prior_user_questions=(message.content for message in history if message.role == "user"),
+        )
+
     def delete_conversation(self, conversation_id: str) -> bool:
         return self.store.delete_conversation(conversation_id)
 
@@ -155,6 +164,23 @@ class ConversationRAGService:
             original_question=original,
         )
         follow_up = requires_query_rewrite(original)
+        if follow_up and not history:
+            result = self._clarification_result()
+            assistant = self._store_assistant(conversation_id, original, None, result)
+            return ConversationTurnResult(
+                conversation_id, original, None, False,
+                result, user_message.id, assistant.id,
+            )
+        if not is_campus_education_question(
+            original,
+            prior_user_questions=(message.content for message in history if message.role == "user"),
+        ):
+            result = self.answerer.answer(original, retrieval_query=original)
+            assistant = self._store_assistant(conversation_id, original, original, result)
+            return ConversationTurnResult(
+                conversation_id, original, original, False,
+                result, user_message.id, assistant.id,
+            )
         retrieval_query: str | None = original
         rewritten = False
         if follow_up:

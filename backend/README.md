@@ -18,11 +18,19 @@ For the test suite only, use `python -m pip install -e ".\backend[test]"`.
 The `all` extra includes the embedding model runtime, Google GenAI SDK, and
 Gradio notebook UI. Model weights are downloaded by Sentence Transformers on
 first use; they are not bundled in this repository.
+The `api` extra also installs the Google GenAI SDK required by the FastAPI
+generation provider, so an API-only installation can serve Gemma requests.
 
 Set `GOOGLE_API_KEY` in the process environment (or in a local ignored `.env`
 file loaded by your chosen runner). The SDK provider accepts `GOOGLE_API_KEY`,
 `GEMMA_API_KEY`, or the legacy Colab secret name `gemma_API_Key`. The key is
 read at provider creation and is never logged or included in results.
+
+The shared core refuses requests with no recognized campus or education
+topic before retrieval or generation. This is a deterministic topic boundary,
+not a general-purpose intent classifier; phrase campus context explicitly
+when a question could refer to another domain. In-scope answers still require
+retrieved evidence and valid document/page citations.
 
 ## Use the shared core
 

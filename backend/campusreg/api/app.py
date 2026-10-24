@@ -31,6 +31,7 @@ from campusreg.rag.generation import GoogleGenAIProvider, TextGenerator
 from campusreg.rag.knowledge_graph import build_source_knowledge_graph
 from campusreg.rag.models import AnswerResult, AnswerStatus, RetrievedSource
 from campusreg.rag.pipeline import MultiDocumentRAGEngine
+from campusreg.rag.scope import is_campus_education_question
 from campusreg.storage.models import DocumentRecord
 from campusreg.storage.sqlite_store import SQLiteDocumentStore
 from campusreg.api.schemas import (
@@ -308,7 +309,8 @@ def create_app(
     @application.post("/api/questions", response_model=QuestionResponse, tags=["questions"])
     def ask_question(request: QuestionRequest) -> Any:
         selected = service_from_scope()
-        require_model_key(selected)
+        if is_campus_education_question(request.question):
+            require_model_key(selected)
         try:
             result = selected.engine.answer(request.question)
             response = _question_response(result)
@@ -361,8 +363,9 @@ def create_app(
     @application.post("/api/conversations/{conversation_id}/questions", response_model=QuestionResponse, tags=["conversations"])
     def ask_conversation(conversation_id: str, request: QuestionRequest) -> Any:
         selected = service_from_scope()
-        require_model_key(selected)
         try:
+            if selected.conversations.is_in_scope(conversation_id, request.question):
+                require_model_key(selected)
             turn = selected.conversations.ask(conversation_id, request.question)
         except KeyError:
             raise HTTPException(404, detail={"code": "conversation_not_found", "message": "Create the conversation before using it."}) from None
