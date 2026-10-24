@@ -247,6 +247,26 @@ def test_answer_keeps_only_a_response_with_a_retrieved_source_citation() -> None
     assert result.answer == "The passage states the rule. [synthetic-rules.pdf, p. 7]"
 
 
+def test_answer_abstains_for_out_of_scope_topics() -> None:
+    class OutOfScopeGenerator:
+        def generate(self, prompt, **kwargs):
+            assert "campus compliance questions" in kwargs["system_instruction"]
+            return "This assistant only answers campus compliance questions supported by the indexed documents."
+
+    knowledge_base = KnowledgeBase(
+        name="synthetic-rules.pdf",
+        chunks=(TextChunk(page=7, text="A policy passage about a source-backed requirement.", source_name="synthetic-rules.pdf"),),
+        vectors=np.array([[1.0, 0.0]], dtype=np.float32),
+    )
+    result = answer(
+        "Write a poem about mountains.", knowledge_base,
+        FakeEmbedder({"Write a poem about mountains.": [1.0, 0.0]}),
+        OutOfScopeGenerator(), RAGSettings(top_k=1),
+    )
+    assert result.status is AnswerStatus.ABSTAINED
+    assert result.answer == "This assistant only answers campus compliance questions supported by the indexed documents."
+
+
 def test_uncited_generation_is_rejected_as_an_answer() -> None:
     class UncitedGenerator:
         def generate(self, *args, **kwargs):

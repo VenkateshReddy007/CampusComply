@@ -50,6 +50,7 @@ The Colab notebook is a lightweight demo client for this shared core. It can lau
 - **Retrieval choices can be measured.** Dense cosine retrieval remains available as the baseline. BM25 with Reciprocal Rank Fusion can be compared without mixing uncalibrated scores.
 - **Evaluation separates software behavior from policy quality.** The package supports retrieval experiments, paired RAG/no-RAG runs, evidence-gate calibration, follow-up evaluation, and fixed-evidence Gemma comparison. Factual answer and citation-support labels require human review.
 - **Potential conflicts show both sources.** A separate comparison service validates each passage quote, source identity, page, scope excerpt, and date before returning a report. It requires human review and never selects the controlling rule.
+- **A source knowledge graph exposes provenance.** The graph links each indexed document to its physical PDF pages and exact passages. It does not infer semantic relationships between rules.
 - **The local interface uses the API contract.** The Next.js app uploads PDFs, manages documents and conversations, displays returned answer evidence, checks cross-document differences, and exposes protected development evaluation jobs.
 
 These are project design choices, not a claim that the approach is the first of its kind. Conflict labels are review prompts rather than institutional determinations.
@@ -71,6 +72,23 @@ Students already encounter policy information as long PDFs, revised handbooks, a
 | Development evaluation jobs protected by a backend bearer token | Privacy, legal, or DPDP compliance certification |
 
 Similarity and fusion scores are retrieval diagnostics, not calibrated probabilities. The evidence gate needs reviewed validation data and separate calibration for the chosen retrieval configuration. Scanned PDFs are rejected because OCR is not implemented. Treat generated answers as an aid to locating official text, not a replacement for the institution’s authoritative policy or staff guidance.
+
+The assistant is scoped to campus compliance questions and is instructed to abstain from unrelated requests. The local UI does not show an API-key warning until a user invokes an action that needs generation; a missing or invalid key then appears as a structured request error, never as an answer.
+
+### Source-grounded question starters
+
+These prompts are templates, not claims that a particular rule exists. Replace bracketed terms with wording found in the official PDFs you indexed:
+
+- `Which requirements are stated in the indexed documents?`
+- `Which page mentions [topic or requirement]?`
+- `What exceptions does the source list for [requirement]?`
+- `Do the indexed documents describe [topic] differently for [group or situation]?`
+
+The answer and visible evidence depend on the indexed source material. Local software fixtures are visibly labelled and must not be used as real regulations or policy evaluation data.
+
+### Model selection and routing
+
+The current Google GenAI integration uses the configured Gemma 4 model; it does not pretend to route among Gemma 2, 3, and 4. Google's hosted Gemma API documentation currently lists Gemma 4 `gemma-4-31b-it` and `gemma-4-26b-a4b-it` and requires an API key. Gemma 2/3 routing needs separately configured, tested inference endpoints and an explicit routing policy. No such endpoints are configured here, so no model is silently substituted. See [Google's hosted Gemma model list](https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api).
 
 ## Baseline and notebooks
 
@@ -129,9 +147,9 @@ Full evaluations are explicit commands and can make model requests. They do not 
 
 ## Results that have actually been measured
 
-Checks run locally on 2026-10-24. The backend suite passed **81 tests**
-(8.38 seconds; one Starlette pending-deprecation warning). Frontend tests
-passed **5 tests**; lint, type-check, and production build passed. A local API
+Checks run locally on 2026-10-24. The backend suite passed **85 tests**
+(6.89 seconds; one Starlette pending-deprecation warning). Frontend tests
+passed **7 tests**; lint, type-check, and production build passed. A local API
 smoke check returned HTTP 200 for the web app and API health endpoint. Two
 clearly labelled synthetic PDFs indexed as one page and one chunk each, with
 384-dimensional embeddings. API readiness correctly reported degraded because
@@ -140,8 +158,8 @@ for exact commands and scope. These are software checks, not campus-policy
 accuracy measurements.
 
 ```text
-Backend: python -m pytest tests -q              81 passed, 1 warning (8.38s)
-Frontend: npm test                              5 passed
+Backend: python -m pytest tests -q              85 passed, 1 warning (6.89s)
+Frontend: npm test                              7 passed
 Frontend: npm run lint                          passed
 Frontend: npm run typecheck                    passed
 Frontend: npm run build                        passed
@@ -180,7 +198,7 @@ The local web interface is the application entry point; question answering and m
 ## Repository map
 
 ```text
-backend/campusreg/       shared ingestion, RAG, conflict, storage, API, and evaluation code
+backend/campusreg/       shared ingestion, RAG, source graph, conflict, storage, API, and evaluation code
 backend/tests/           unit and mocked API integration tests
 frontend/                Next.js App Router, TypeScript, Tailwind, and UI components
 notebooks/               shared-core Colab notebook and baseline reference

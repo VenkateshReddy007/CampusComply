@@ -16,6 +16,9 @@ measured on institutional documents.
 | Overlapping scopes or valid exception | Separate labels are available; both exact passages retained | Synthetic fixture contract tests | Classification needs qualified human review |
 | Follow-up has ambiguous referent | Clarification response; fresh retrieval follows a resolved query | Conversation tests | Rewriter quality not measured on real multi-turn policy questions |
 | Model key absent | Generation-dependent API actions fail with a structured configuration response | API configuration test | Local operator must configure the key for live generation |
+| Off-topic question | The generation prompt asks Gemma to abstain outside campus compliance and the core recognizes the configured refusal | Out-of-scope core test | This is prompt-guided, not a formal domain classifier; no live model evaluation has been run |
+| Graph implies an unsupported policy relation | Graph edges are limited to document/page/passage containment | Knowledge graph unit/API tests | It is a source provenance graph, not a semantic or policy dependency graph |
+| Requested Gemma 2/3 routing | No route is advertised; the configured hosted provider currently uses Gemma 4 | Configuration inspection and current provider documentation | Gemma 2/3 require separately configured and tested inference endpoints plus routing evaluation |
 | Key exposure | API readiness reports a boolean only; key is never part of response schema | Static code/test review | Production secret management and deployment still need review |
 | Evaluation dataset absent | Protected development runner refuses to start when its configured dataset is absent/empty | Dataset and API route contract | No actual evaluation job can produce policy metrics yet |
 

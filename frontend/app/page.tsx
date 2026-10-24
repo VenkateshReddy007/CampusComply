@@ -3,19 +3,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle, ArrowRight, BookOpenText, Check, ChevronDown,
-  CircleHelp, Clock3, FileText, FolderOpen, Gauge, KeyRound, LoaderCircle, MessageSquareText,
-  Plus, RefreshCw, Search, Send, ShieldAlert, ShieldCheck, SlidersHorizontal,
+  CircleHelp, Clock3, FileText, FolderOpen, Gauge, LoaderCircle, MessageSquareText,
+  Network, Plus, RefreshCw, Search, Send, ShieldAlert, ShieldCheck, SlidersHorizontal,
   Sparkles, Trash2, Upload, X,
 } from "lucide-react";
 import { api, messageFromQuestion, responseFromError } from "@/lib/api";
-import type { ConflictReport, ConversationMessage, DocumentRecord, EvaluationJob, Source, UploadItem } from "@/lib/contracts";
+import type { ConflictReport, ConversationMessage, DocumentRecord, EvaluationJob, KnowledgeGraph, Source, UploadItem } from "@/lib/contracts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-type View = "chats" | "documents" | "evaluation";
+type View = "chats" | "documents" | "knowledge" | "evaluation";
 type UIMessage = {
   key: string;
   role: "user" | "assistant";
@@ -33,8 +33,20 @@ const CONVERSATION_STORAGE_KEY = "campusreg.conversation.v1";
 const NAV_ITEMS: { id: View; label: string; icon: typeof MessageSquareText }[] = [
   { id: "chats", label: "Chats", icon: MessageSquareText },
   { id: "documents", label: "Regulations", icon: BookOpenText },
+  { id: "knowledge", label: "Knowledge graph", icon: Network },
   { id: "evaluation", label: "Evaluation", icon: Gauge },
 ];
+
+const QUESTION_STARTERS = [
+  "Which requirements are stated in the indexed documents?",
+  "Which page states the deadline for [topic]?",
+  "What exceptions are listed for [requirement]?",
+  "Do the indexed documents give the same rule for [group]?",
+];
+
+function isSyntheticFixture(document: DocumentRecord) {
+  return document.filename.toLowerCase().includes("synthetic") || document.document_type.toLowerCase() === "synthetic";
+}
 
 function sourceFromStored(value: unknown): Source[] {
   if (!Array.isArray(value)) return [];
@@ -73,7 +85,6 @@ function citedText(text: string, sources: Source[], onSelect: (source: Source) =
 export default function HomePage() {
   const [view, setView] = useState<View>("chats");
   const [apiStatus, setApiStatus] = useState<"checking" | "online" | "offline">("checking");
-  const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [conversationId, setConversationId] = useState("");
   const [messages, setMessages] = useState<UIMessage[]>([]);
@@ -90,6 +101,8 @@ export default function HomePage() {
   const [evaluationSplit, setEvaluationSplit] = useState("validation");
   const [evaluationJob, setEvaluationJob] = useState<EvaluationJob | null>(null);
   const [evaluationError, setEvaluationError] = useState("");
+  const [knowledgeGraph, setKnowledgeGraph] = useState<KnowledgeGraph | null>(null);
+  const [knowledgeGraphError, setKnowledgeGraphError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
 
@@ -114,10 +127,9 @@ export default function HomePage() {
     let active = true;
     async function initialize() {
       try {
-        const [, readiness] = await Promise.all([api.health(), api.readiness()]);
+        await api.health();
         if (!active) return;
         setApiStatus("online");
-        setModelConfigured(readiness.model_api_key_configured);
         const existing = window.localStorage.getItem(CONVERSATION_STORAGE_KEY);
         const [records, existingHistory] = await Promise.all([
           api.listDocuments(),
@@ -144,6 +156,17 @@ export default function HomePage() {
     void initialize();
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (view !== "knowledge") return;
+    let active = true;
+    void api.knowledgeGraph().then((graph) => {
+      if (active) setKnowledgeGraph(graph);
+    }).catch((error: unknown) => {
+      if (active) setKnowledgeGraphError(error instanceof Error ? error.message : "The source graph could not be loaded.");
+    });
+    return () => { active = false; };
+  }, [view]);
 
   useEffect(() => {
     const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
@@ -285,7 +308,7 @@ export default function HomePage() {
         <div className="workspace-label">WORKSPACE</div>
         <nav className="nav-list">
           {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" onClick={() => setView(id)} className={`nav-item ${view === id ? "active" : ""}`} aria-label={label} aria-current={view === id ? "page" : undefined}>
+            <button key={id} type="button" onClick={() => { if (id === "knowledge") { setKnowledgeGraph(null); setKnowledgeGraphError(""); } setView(id); }} className={`nav-item ${view === id ? "active" : ""}`} aria-label={label} aria-current={view === id ? "page" : undefined}>
               <Icon size={17} strokeWidth={1.8} /><span>{label}</span>
               {id === "documents" && <span className="nav-count">{documents.length}</span>}
             </button>
@@ -308,7 +331,6 @@ export default function HomePage() {
           <div className="breadcrumb"><span>CampusComply</span><ArrowRight size={13} /><strong>{NAV_ITEMS.find((item) => item.id === view)?.label}</strong></div>
           <div className="topbar-actions">
             <span className={`connection-pill ${apiStatus}`}><span className="connection-dot" />{apiStatus === "online" ? "API online" : apiStatus === "offline" ? "API offline" : "Connecting"}</span>
-            {apiStatus === "online" && <span className={`model-pill ${modelConfigured ? "configured" : "missing"}`} title={modelConfigured ? "Backend model credential is configured" : "Set the model key on the backend to enable generation"}><KeyRound size={13} />{modelConfigured ? "Gemma ready" : "Gemma key needed"}</span>}
             {view === "chats" && <Button variant="secondary" size="sm" onClick={() => void startNewConversation()} disabled={apiStatus !== "online"}><Plus size={15} />New chat</Button>}
           </div>
         </header>
@@ -316,7 +338,6 @@ export default function HomePage() {
         <div className="content-scroll">
           {pageError && <div className="notice error-notice" role="alert"><AlertCircle size={17} /><span>{pageError}</span><button type="button" aria-label="Dismiss" onClick={() => setPageError("")}><X size={15} /></button></div>}
           {apiStatus === "offline" && <div className="offline-banner"><CircleHelp size={18} /><div><strong>Backend connection unavailable</strong><p>{pageError || "Start the FastAPI service, then retry."}</p></div><Button variant="secondary" size="sm" onClick={() => window.location.reload()}><RefreshCw size={14} />Retry</Button></div>}
-          {view === "chats" && apiStatus === "online" && modelConfigured === false && <div className="notice model-notice" role="status"><KeyRound size={15} /><span>Gemma generation is not configured. Add a backend API key to enable answers and model-assisted conflict checks.</span></div>}
           <input ref={fileRef} className="sr-only" type="file" accept="application/pdf,.pdf" multiple onChange={(event) => void handleUpload(event.target.files)} />
 
           {view === "chats" && (
@@ -325,6 +346,7 @@ export default function HomePage() {
                 <div><div className="eyebrow"><Sparkles size={14} /> EVIDENCE-FIRST ASSISTANT</div><h1>Ask the regulations.</h1><p>Get a clear answer grounded in your indexed documents, with the source passage beside it.</p></div>
                 <Button variant="ghost" size="sm" onClick={() => void clearChat()} disabled={!messages.length}><Trash2 size={14} />Clear chat</Button>
               </div>
+              {documents.some(isSyntheticFixture) && <div className="fixture-notice" role="note"><ShieldAlert size={16} /><span>Synthetic fixture files are for software checks only. They are not institutional policy and must not be used for compliance decisions.</span></div>}
               <div className="chat-layout">
                 <div className="chat-main">
                   {documents.length === 0 && !messages.length ? (
@@ -360,6 +382,7 @@ export default function HomePage() {
 
                   <form className="composer" onSubmit={askQuestion}>
                     <label htmlFor="question" className="sr-only">Ask about your indexed regulations</label>
+                    {!messages.length && documents.length > 0 && <div className="question-starters" aria-label="Question starters"><span>Question starters · replace bracketed text with a term from your source</span><div>{QUESTION_STARTERS.map((starter) => <button key={starter} type="button" onClick={() => setQuestion(starter)}>{starter}</button>)}</div></div>}
                     <Textarea id="question" value={question} onChange={(event) => setQuestion(event.target.value)} placeholder={documents.length ? "Ask about a rule, deadline, exception, or requirement…" : "Add an official document to begin…"} maxLength={4000} disabled={!documents.length || busy || apiStatus !== "online"} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
                     <div className="composer-footer"><span><ShieldCheck size={13} />Answers cite the current indexed evidence</span><Button size="sm" type="submit" disabled={!question.trim() || !documents.length || busy || !conversationId}><Send size={14} />Ask</Button></div>
                   </form>
@@ -403,6 +426,13 @@ export default function HomePage() {
             </div>
           )}
 
+          {view === "knowledge" && (
+            <div className="knowledge-view">
+              <div className="page-heading"><div><div className="eyebrow"><Network size={14} /> SOURCE PROVENANCE</div><h1>Knowledge graph</h1><p>Trace each indexed passage to its document and original PDF page.</p></div></div>
+              <KnowledgeGraphView graph={knowledgeGraph} loading={knowledgeGraph === null && !knowledgeGraphError} error={knowledgeGraphError} />
+            </div>
+          )}
+
           {view === "evaluation" && (
             <div className="evaluation-view">
               <div className="page-heading"><div><div className="eyebrow"><Gauge size={14} /> MEASURED RESULTS</div><h1>Evaluation workspace</h1><p>Start a protected development run against the reviewed dataset configured on the backend.</p></div></div>
@@ -429,13 +459,48 @@ export default function HomePage() {
 }
 
 function DocumentRow({ record, onDelete, onReindex }: { record: DocumentRecord; onDelete: () => void; onReindex: () => void }) {
+  const fixture = isSyntheticFixture(record);
   return (
     <article className="document-row">
       <div className="document-type-icon"><FileText size={18} /></div>
-      <div className="document-main"><div className="document-name-line"><strong>{record.filename}</strong><Badge className={`status-badge ${record.ingestion_status}`}>{record.ingestion_status}</Badge></div><p>{record.document_type} · {formatBytes(record.size_bytes)} · {record.page_count} pages · {record.chunk_count} passages</p><span className="document-detail">Added {new Date(record.created_at).toLocaleDateString()} · SHA-256 {record.content_hash.slice(0, 12)}</span></div>
+      <div className="document-main"><div className="document-name-line"><strong>{record.filename}</strong><Badge className={`status-badge ${record.ingestion_status}`}>{record.ingestion_status}</Badge>{fixture && <Badge className="fixture-label">Synthetic fixture · not policy</Badge>}</div><p>{record.document_type} · {formatBytes(record.size_bytes)} · {record.page_count} pages · {record.chunk_count} passages</p><span className="document-detail">Added {new Date(record.created_at).toLocaleDateString()} · SHA-256 {record.content_hash.slice(0, 12)}</span></div>
       <div className="document-actions"><Button variant="ghost" size="icon" title="Re-index document" aria-label={`Re-index ${record.filename}`} onClick={onReindex}><RefreshCw size={15} /></Button><Button variant="ghost" size="icon" title="Delete document" aria-label={`Delete ${record.filename}`} onClick={onDelete}><Trash2 size={15} /></Button></div>
     </article>
   );
+}
+
+function KnowledgeGraphView({ graph, loading, error }: { graph: KnowledgeGraph | null; loading: boolean; error: string }) {
+  if (loading) return <div className="graph-state" role="status"><LoaderCircle className="spin" size={18} />Loading source relationships…</div>;
+  if (error) return <div className="notice error-notice" role="alert"><AlertCircle size={16} />{error}</div>;
+  if (!graph?.nodes.length) return <div className="graph-state"><FileText size={20} /><p>Index a text-based policy PDF to build its source graph.</p></div>;
+
+  const documents = graph.nodes.filter((node) => node.type === "document");
+  const nodesById = new Map(graph.nodes.map((node) => [node.id, node]));
+  return <section className="knowledge-graph" aria-label="Document and passage provenance graph">
+    <p className="graph-scope">{graph.scope_note}</p>
+    {graph.truncated && <p className="graph-truncated" role="status">Showing the first 500 indexed passages. Narrow the source set to inspect a smaller graph.</p>}
+    {documents.map((document) => {
+      const pageIds = graph.edges.filter((edge) => edge.source === document.id && edge.relation === "contains_page").map((edge) => edge.target);
+      return <article className="graph-document" key={document.id}>
+        <div className="graph-node document-node"><BookOpenText size={16} /><div><span>DOCUMENT</span><strong>{document.document_name}</strong></div></div>
+        {pageIds.map((pageId) => {
+          const page = nodesById.get(pageId);
+          if (!page) return null;
+          const passageIds = graph.edges.filter((edge) => edge.source === page.id && edge.relation === "contains_passage").map((edge) => edge.target);
+          return <div className="graph-page" key={page.id}>
+            <div className="graph-node page-node"><FileText size={15} /><strong>{page.label}</strong></div>
+            <div className="graph-passages">{passageIds.map((passageId) => {
+              const passage = nodesById.get(passageId);
+              return passage ? <article className="graph-node passage-node" key={passage.id}>
+                <span className="graph-passage-title">{passage.label} · {passage.citation}</span>
+                <blockquote>{passage.text}</blockquote>
+              </article> : null;
+            })}</div>
+          </div>;
+        })}
+      </article>;
+    })}
+  </section>;
 }
 
 function ConflictPanel({ reports }: { reports: ConflictReport[] }) {

@@ -38,6 +38,13 @@ verified date checks against indexed passages and document metadata. Reports
 carry both source passages and require human review. No authority hierarchy is
 implemented.
 
+`build_source_knowledge_graph` and `GET /api/knowledge-graph` expose a bounded
+provenance graph: document → physical PDF page → exact indexed passage. Each
+passage node retains its document name, page, chunk ID, citation, and text.
+Edges describe containment only; the graph does not infer that two policies
+share a subject or conflict. This gives the UI a traceable map of indexed
+evidence without presenting invented regulatory relationships.
+
 ## API and frontend
 
 `backend/campusreg/api/app.py` exposes typed FastAPI routes which call the
@@ -85,6 +92,15 @@ deployment hardening, and retention controls remain outside the implemented
 scope. No official campus corpus or reviewed benchmark dataset is checked in,
 so no campus-policy accuracy or real-data conflict metric is available from
 this repository.
+
+The application prompt scopes generation to campus compliance and requires
+answers to be grounded in current retrieved evidence; unrelated questions are
+expected to receive a structured abstention. This remains model-guided behavior
+and is not a formal legal or policy classifier. Missing model configuration is
+reported only when a generation-dependent request is attempted. The configured
+provider does not implement Gemma 2/3/4 context-based model routing; the hosted
+Gemma API used here documents Gemma 4 models only. Adding other families needs
+real, separately configured providers and measured routing behavior.
 
 See [the backend guide](../backend/README.md) and phase notes for details on
 [multi-document ingestion](phase-3-multi-document.md),

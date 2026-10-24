@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -23,6 +23,31 @@ class SourceSchema(BaseModel):
     retrieval_method: str
     score: float
     diagnostics: dict[str, Any] = Field(default_factory=dict)
+
+
+class KnowledgeGraphNodeSchema(BaseModel):
+    id: str
+    type: Literal["document", "page", "passage"]
+    label: str
+    document_id: str
+    document_name: str
+    page: int | None = Field(default=None, ge=1)
+    chunk_id: str | None = None
+    citation: str | None = None
+    text: str | None = None
+
+
+class KnowledgeGraphEdgeSchema(BaseModel):
+    source: str
+    target: str
+    relation: Literal["contains_page", "contains_passage"]
+
+
+class KnowledgeGraphSchema(BaseModel):
+    nodes: list[KnowledgeGraphNodeSchema]
+    edges: list[KnowledgeGraphEdgeSchema]
+    truncated: bool
+    scope_note: str
 
 
 class QuestionRequest(BaseModel):

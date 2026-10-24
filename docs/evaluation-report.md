@@ -40,10 +40,10 @@ npm run build
 
 Actual results:
 
-- Backend: `81 passed, 1 warning in 8.38s`. The warning is a Starlette
+- Backend: `85 passed, 1 warning in 6.89s`. The warning is a Starlette
   `PendingDeprecationWarning` about importing `python_multipart` instead of
   `multipart`.
-- Frontend: `npm test` — 5 tests passed.
+- Frontend: `npm test` — 7 tests passed.
 - Frontend: `npm run lint` — passed.
 - Frontend: `npm run typecheck` — passed.
 - Frontend: `npm run build` — passed; Next.js 16.4.3 generated the `/` and
@@ -55,6 +55,10 @@ Actual results:
   They are excluded from Git and are not policy-evaluation data.
 - No live Gemma request was made. Question generation and model-assisted
   conflict comparison therefore remain unverified in this local run.
+- Source knowledge graph tests cover document/page/passage provenance and the
+  live API graph response; no policy-semantic edges are inferred.
+- The running UI was checked to ensure the model-key warning is absent before
+  interaction and a missing-key error appears after a generation request.
 
 The API integration suite uses synthetic PDFs, fake embeddings, and mock
 generation/comparison providers. It checks upload/indexing, exact source

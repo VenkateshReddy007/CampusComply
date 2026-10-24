@@ -81,3 +81,28 @@ export type EvaluationJob = {
   result: Record<string, unknown> | null;
   error: { code: string; message: string } | null;
 };
+
+export type KnowledgeGraphNode = {
+  id: string;
+  type: "document" | "page" | "passage";
+  label: string;
+  document_id: string;
+  document_name: string;
+  page: number | null;
+  chunk_id: string | null;
+  citation: string | null;
+  text: string | null;
+};
+
+export type KnowledgeGraphEdge = {
+  source: string;
+  target: string;
+  relation: "contains_page" | "contains_passage";
+};
+
+export type KnowledgeGraph = {
+  nodes: KnowledgeGraphNode[];
+  edges: KnowledgeGraphEdge[];
+  truncated: boolean;
+  scope_note: string;
+};

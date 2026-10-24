@@ -31,7 +31,13 @@ ANSWER_RULES = """Answer questions using ONLY the context passages provided.
 Every factual claim must cite its source using the exact document name, document
 ID, and page shown in the context, formatted as [document name, document ID, p. N]. Never invent a source
 or page. If the answer is not supported by the context, reply exactly:
-"The answer could not be found in the document." Keep the answer concise."""
+"The answer could not be found in the document." This assistant is limited to
+campus policy and compliance questions answered from the supplied passages. For
+questions outside that scope, reply exactly: "This assistant only answers
+campus compliance questions supported by the indexed documents." Do not add
+general knowledge or legal advice. Keep the answer concise."""
+
+OUT_OF_SCOPE_ANSWER = "This assistant only answers campus compliance questions supported by the indexed documents."
 
 
 def answer(
@@ -83,7 +89,7 @@ def answer(
             retrieval_query=search_query,
         )
 
-    if generated.strip() == "The answer could not be found in the document.":
+    if generated.strip() in {"The answer could not be found in the document.", OUT_OF_SCOPE_ANSWER}:
         return AnswerResult(
             status=AnswerStatus.ABSTAINED,
             answer=generated.strip(),

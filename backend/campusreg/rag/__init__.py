@@ -16,6 +16,7 @@ from campusreg.rag.errors import (
     UnsupportedScannedPDFError,
 )
 from campusreg.rag.generation import GoogleGenAIProvider, TextGenerator, generate
+from campusreg.rag.knowledge_graph import build_source_knowledge_graph
 from campusreg.rag.evidence_gate import EvidenceGate, EvidenceGateDecision, EvidenceGatePolicy
 from campusreg.rag.conversation import (
     ConversationRAGService,
@@ -84,6 +85,7 @@ __all__ = [
     "UnsupportedScannedPDFError",
     "answer",
     "build_knowledge_base",
+    "build_source_knowledge_graph",
     "conflict_metrics",
     "generate",
     "read_pdf",

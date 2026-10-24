@@ -120,6 +120,15 @@ def test_health_ready_and_upload_listing_delete_and_evidence(tmp_path: Path) -> 
     evidence = client.get(f"/api/documents/{first_source['document_id']}/evidence/{first_source['chunk_id']}")
     assert evidence.status_code == 200
     assert evidence.json()["text"] == first_source["text"]
+    graph = client.get("/api/knowledge-graph")
+    assert graph.status_code == 200
+    graph_body = graph.json()
+    assert {node["type"] for node in graph_body["nodes"]} == {"document", "page", "passage"}
+    graph_passages = [node for node in graph_body["nodes"] if node["type"] == "passage"]
+    assert len(graph_passages) == 2
+    assert all(node["text"].startswith("SYNTHETIC FIXTURE") for node in graph_passages)
+    assert all(node["citation"].endswith("p. 1]") for node in graph_passages)
+    assert "No policy facts" in graph_body["scope_note"]
     reindexed = client.post(f"/api/documents/{listed[0]['id']}/reindex")
     assert reindexed.status_code == 200
     assert reindexed.json()["filename"] == listed[0]["filename"]

@@ -1,4 +1,4 @@
-import type { ConflictReport, ConversationMessage, DocumentRecord, EvaluationJob, QuestionResponse, UploadItem } from "@/lib/contracts";
+import type { ConflictReport, ConversationMessage, DocumentRecord, EvaluationJob, KnowledgeGraph, QuestionResponse, UploadItem } from "@/lib/contracts";
 
 const API_URL = (process.env.NEXT_PUBLIC_CAMPUSREG_API_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
@@ -43,6 +43,7 @@ export const api = {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question }),
   }),
   conflicts: () => request<{ reports: ConflictReport[]; human_review_required: boolean; authority_decided: boolean }>("/api/conflicts"),
+  knowledgeGraph: () => request<KnowledgeGraph>("/api/knowledge-graph"),
   startEvaluation: (split: string, token: string) => request<EvaluationJob>("/api/development/evaluations", {
     method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ split, force: false }),

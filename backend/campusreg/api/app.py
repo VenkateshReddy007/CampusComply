@@ -28,6 +28,7 @@ from campusreg.rag.errors import (
     MissingAPIConfigurationError,
 )
 from campusreg.rag.generation import GoogleGenAIProvider, TextGenerator
+from campusreg.rag.knowledge_graph import build_source_knowledge_graph
 from campusreg.rag.models import AnswerResult, AnswerStatus, RetrievedSource
 from campusreg.rag.pipeline import MultiDocumentRAGEngine
 from campusreg.storage.models import DocumentRecord
@@ -45,6 +46,7 @@ from campusreg.api.schemas import (
     SourceSchema,
     UploadBatchResponse,
     UploadItemSchema,
+    KnowledgeGraphSchema,
 )
 
 
@@ -294,6 +296,14 @@ def create_app(
             if chunk.document_id == document_id and chunk.chunk_id == chunk_id:
                 return {"document_id": document_id, "document_name": chunk.source_name, "page": chunk.page, "chunk_id": chunk.chunk_id, "text": chunk.text}
         raise HTTPException(404, detail={"code": "evidence_not_found", "message": "That evidence passage is not indexed."})
+
+    @application.get("/api/knowledge-graph", response_model=KnowledgeGraphSchema, tags=["evidence"])
+    def knowledge_graph() -> KnowledgeGraphSchema:
+        """Return bounded, source-linked document/page/passage relationships."""
+
+        chunks = service_from_scope().engine.store.list_source_graph_chunks(limit=501)
+        graph = build_source_knowledge_graph(chunks, max_passages=500)
+        return KnowledgeGraphSchema(**graph)
 
     @application.post("/api/questions", response_model=QuestionResponse, tags=["questions"])
     def ask_question(request: QuestionRequest) -> Any:

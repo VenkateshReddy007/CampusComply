@@ -7,7 +7,8 @@ Pydantic schemas are in `campusreg/api/schemas.py`.
 
 The API provides `/api/health`, `/api/ready`, PDF upload/indexing and document
 management, question answering, exact evidence lookup, conversation lifecycle,
-conflict reports, and development-only evaluation jobs. Interactive API
+conflict reports, a bounded `/api/knowledge-graph` provenance view, and
+development-only evaluation jobs. Interactive API
 documentation is available at `/docs`.
 
 The database defaults to `data/campusreg.sqlite3`; uploads and indexes do not

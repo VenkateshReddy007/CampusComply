@@ -338,6 +338,28 @@ class SQLiteDocumentStore:
             vectors=np.vstack(vectors).astype(np.float32, copy=False),
         )
 
+    def list_source_graph_chunks(self, *, limit: int = 501) -> tuple[TextChunk, ...]:
+        """Read bounded passage metadata for a provenance graph without vectors."""
+
+        if limit <= 0:
+            raise ValueError("limit must be greater than zero")
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT c.document_id, c.filename, c.page_number, c.chunk_id, c.text
+                   FROM chunks c JOIN documents d ON d.id = c.document_id
+                   WHERE d.ingestion_status = 'indexed'
+                   ORDER BY d.created_at, d.id, c.ordinal LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return tuple(
+            TextChunk(
+                page=row["page_number"], text=row["text"],
+                source_name=row["filename"], document_id=row["document_id"],
+                chunk_id=row["chunk_id"],
+            )
+            for row in rows
+        )
+
     def delete_document(self, document_id: str) -> bool:
         with self._connect() as connection, connection:
             cursor = connection.execute("DELETE FROM documents WHERE id = ?", (document_id,))
