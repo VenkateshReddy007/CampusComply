@@ -1,7 +1,7 @@
 # Regulatory hugging face for Campus Buddies
 
 <p align="center">
-  <img src="https://i.ibb.co/JRJ6pzCZ/Campus-Comply-White-Logo-Mark-1.png" alt="CampusComply logo" width="220" />
+  <img src="https://i.ibb.co/JRJ6pzCZ/Campus-Comply-White-Logo-Mark-1.png" alt="CampusComply logo" width="320" />
 </p>
 
 <p align="center"><strong>CampusReg</strong> — an evidence-first campus regulations assistant built around official documents, page-level citations, and clear abstention.</p>
@@ -115,12 +115,22 @@ These are software tests using synthetic fixtures and mocked model calls. They d
 
 CampusComply is released under the [Apache License 2.0](LICENSE). You can inspect, fork, adapt, and contribute to the code under that license. CampusReg does not include a shared API key. Each user supplies their own Google AI Studio credential through a local environment/secret store or Colab Secrets. The key stays out of source code and answer responses. Requests that use Gemma send the current question and retrieved passages to the configured Google GenAI service; only submit documents you are authorized to process there.
 
+## DPDP and Privacy RAG
+
+India's [Digital Personal Data Protection Act, 2023](https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf) and the [Digital Personal Data Protection Rules, 2025](https://www.meity.gov.in/static/uploads/2025/11/53450e6e5dc0bfa85ebd78686cadad39.pdf) are official sources for the country's digital personal-data framework. CampusReg is an educational prototype; it is not legal advice, a compliance assessment, or a DPDP certification.
+
+### What Privacy RAG means here
+
+CampusReg narrows the normal generation payload to the current question and retrieved excerpts instead of sending the full PDF to Gemma. Source PDFs, extracted passages, vectors, and conversation messages persist in the configured local SQLite database. Follow-up query rewriting can use bounded recent conversation context. The Google API key stays in the local runtime environment and is not included in answers or notebook outputs.
+
+Those choices reduce unnecessary context sharing, but they do not make the prototype private by default or DPDP-compliant. When Gemma is enabled, the question and selected passages (and bounded context for a follow-up rewrite) go to the configured Google GenAI service. SQLite data is not encrypted by this project. Storage methods can delete a document or clear conversation history, but there is no user-facing retention/deletion workflow, production authentication, authorization, institution-level tenant isolation, or documented notice/consent process. **Do not use it with identifiable student records or other personal data in production.** Before institutional deployment, have the privacy/legal team review the applicable Act and Rules, data flows, provider terms, access controls, retention, and data-principal rights processes.
+
 ## Contributors and demo links
 
-| Contributor | GitHub | Project demo |
-| --- | --- | --- |
-| Rohan Chand M | [@rohan-chand-m-01](https://github.com/rohan-chand-m-01) | [Open the Colab notebook](https://colab.research.google.com/github/VenkateshReddy007/CampusComply/blob/main/notebooks/02_rag_starter_kit.ipynb) |
-| Venkatesh Reddy K | [@VenkateshReddy007](https://github.com/VenkateshReddy007) | [CampusComply repository](https://github.com/VenkateshReddy007/CampusComply) · [Open the Colab notebook](https://colab.research.google.com/github/VenkateshReddy007/CampusComply/blob/main/notebooks/02_rag_starter_kit.ipynb) |
+| Photo | Contributor | GitHub | Project demo |
+| --- | --- | --- | --- |
+| <img src="https://github.com/rohan-chand-m-01.png" alt="Rohan Chand M GitHub profile photo" width="72" /> | Rohan Chand M | [@rohan-chand-m-01](https://github.com/rohan-chand-m-01) | [Open the Colab notebook](https://colab.research.google.com/github/VenkateshReddy007/CampusComply/blob/main/notebooks/02_rag_starter_kit.ipynb) |
+| <img src="https://github.com/VenkateshReddy007.png" alt="Venkatesh Reddy K GitHub profile photo" width="72" /> | Venkatesh Reddy K | [@VenkateshReddy007](https://github.com/VenkateshReddy007) | [CampusComply repository](https://github.com/VenkateshReddy007/CampusComply) · [Open the Colab notebook](https://colab.research.google.com/github/VenkateshReddy007/CampusComply/blob/main/notebooks/02_rag_starter_kit.ipynb) |
 
 The notebook is the runnable demo entry point; it requires a user-provided API key and official source PDFs. There is no hosted live demo URL yet.
 
