@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://campusreg.invalid/evaluation/dataset.schema.json",
+  "title": "CampusReg human-reviewed evaluation question",
+  "description": "A JSON Lines record. Ready records must be grounded in verified official sources and manually reviewed.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "question",
+    "category",
+    "expected_answer",
+    "answerable",
+    "expected_document_ids",
+    "expected_pages",
+    "expected_conflict",
+    "split",
+    "record_status",
+    "conversation_context",
+    "expected_claims",
+    "human_review"
+  ],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "question": { "type": "string", "minLength": 1 },
+    "category": { "$ref": "#/$defs/category" },
+    "expected_answer": { "type": ["string", "null"] },
+    "answerable": { "type": ["boolean", "null"] },
+    "expected_document_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "expected_pages": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/pageReference" }
+    },
+    "expected_conflict": { "type": ["boolean", "null"] },
+    "split": { "type": "string", "enum": ["development", "validation", "test"] },
+    "record_status": { "type": "string", "enum": ["template", "draft", "ready"] },
+    "conversation_context": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/conversationTurn" }
+    },
+    "expected_claims": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/expectedClaim" }
+    },
+    "human_review": { "$ref": "#/$defs/humanReview" }
+  },
+  "$defs": {
+    "category": {
+      "type": "string",
+      "enum": [
+        "direct_factual",
+        "multiple_passages",
+        "multiple_documents",
+        "exceptions_or_effective_dates",
+        "unanswerable",
+        "follow_up",
+        "potential_conflict"
+      ]
+    },
+    "pageReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["document_id", "page_number"],
+      "properties": {
+        "document_id": { "type": "string", "minLength": 1 },
+        "page_number": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "conversationTurn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "content"],
+      "properties": {
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string", "minLength": 1 }
+      }
+    },
+    "expectedClaim": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claim_id", "claim", "supporting_pages"],
+      "properties": {
+        "claim_id": { "type": "string", "minLength": 1 },
+        "claim": { "type": "string", "minLength": 1 },
+        "supporting_pages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/pageReference" }
+        }
+      }
+    },
+    "humanReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "source_documents_verified", "reviewer", "reviewed_at", "notes"],
+      "properties": {
+        "status": { "type": "string", "enum": ["pending", "reviewed"] },
+        "source_documents_verified": { "type": ["boolean", "null"] },
+        "reviewer": { "type": ["string", "null"] },
+        "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "notes": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "record_status": { "const": "ready" } } },
+      "then": {
+        "properties": {
+          "answerable": { "type": "boolean" },
+          "expected_conflict": { "type": "boolean" },
+          "human_review": {
+            "properties": {
+              "status": { "const": "reviewed" },
+              "reviewer": { "type": "string", "minLength": 1 },
+              "reviewed_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "record_status": { "const": "ready" }, "answerable": { "const": true } } },
+      "then": {
+        "properties": {
+          "expected_answer": { "type": "string", "minLength": 1 },
+          "expected_document_ids": { "minItems": 1 },
+          "expected_pages": { "minItems": 1 },
+          "human_review": {
+            "properties": { "source_documents_verified": { "const": true } }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "record_status": { "const": "ready" }, "answerable": { "const": false } } },
+      "then": {
+        "properties": {
+          "expected_answer": { "type": "null" },
+          "expected_document_ids": { "maxItems": 0 },
+          "expected_pages": { "maxItems": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "category": { "const": "potential_conflict" }, "record_status": { "const": "ready" } } },
+      "then": { "properties": { "expected_conflict": { "type": "boolean" } } }
+    },
+    {
+      "if": { "properties": { "category": { "const": "unanswerable" }, "record_status": { "const": "ready" } } },
+      "then": { "properties": { "answerable": { "const": false } } }
+    },
+    {
+      "if": { "properties": { "expected_conflict": { "const": true }, "record_status": { "const": "ready" } } },
+      "then": { "properties": { "expected_claims": { "minItems": 2 } } }
+    },
+    {
+      "if": { "properties": { "category": { "const": "multiple_passages" }, "record_status": { "const": "ready" } } },
+      "then": { "properties": { "expected_pages": { "minItems": 2 } } }
+    },
+    {
+      "if": { "properties": { "category": { "const": "multiple_documents" }, "record_status": { "const": "ready" } } },
+      "then": { "properties": { "expected_document_ids": { "minItems": 2 } } }
+    },
+    {
+      "if": { "properties": { "category": { "const": "follow_up" }, "record_status": { "const": "ready" } } },
+      "then": { "properties": { "conversation_context": { "minItems": 1 } } }
+    }
+  ]
+}

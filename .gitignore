@@ -1,0 +1,61 @@
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+
+# Python environments, bytecode, and test/tool caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+*.whl
+
+# Notebook runtime state and outputs/checkpoints
+.ipynb_checkpoints/
+
+# User-provided or downloaded source documents
+uploads/
+uploaded_documents/
+data/uploads/
+data/documents/
+data/raw/
+*.pdf
+
+# Vector indexes, embeddings, and local databases
+indexes/
+index/
+vector_store/
+vectorstore/
+chroma/
+chroma_db/
+*.faiss
+*.index
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated evaluation/benchmark outputs
+evaluation/results/**
+!evaluation/results/.gitkeep
+benchmark-results/
+benchmark_results/
+generated-results/
+
+# Frontend/build caches
+node_modules/
+.next/
+dist/
+build/
+
+# Common OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

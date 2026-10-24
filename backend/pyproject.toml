@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "campusreg-rag"
+version = "0.1.0"
+description = "Shared retrieval-augmented generation core for CampusReg"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "pypdf>=5.0",
+]
+
+[project.scripts]
+campusreg-retrieval-experiments = "campusreg.evaluation.retrieval_experiments:main"
+campusreg-paired-evaluation = "campusreg.evaluation.paired:main"
+campusreg-evidence-gate = "campusreg.evaluation.gate_calibration:main"
+campusreg-model-comparison = "campusreg.evaluation.model_comparison:main"
+campusreg-hybrid-comparison = "campusreg.evaluation.hybrid_comparison:main"
+
+[project.optional-dependencies]
+embeddings = ["sentence-transformers>=3.0"]
+google = ["google-genai>=1.0"]
+notebook = [
+  "sentence-transformers>=3.0",
+  "google-genai>=1.0",
+  "gradio>=6,<7",
+]
+test = ["pytest>=8.0", "jsonschema>=4.20"]
+all = [
+  "sentence-transformers>=3.0",
+  "google-genai>=1.0",
+  "gradio>=6,<7",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["campusreg*"]

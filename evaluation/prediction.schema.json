@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://campusreg.invalid/evaluation/prediction.schema.json",
+  "title": "CampusReg evaluation prediction",
+  "description": "One JSON Lines output row, including retrieved evidence and nullable human review labels.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "question_id", "question", "category", "split", "cache_key",
+    "config_fingerprint", "status", "answer", "retrieved_sources",
+    "latency_ms", "request_failed", "error_code", "citation_exists",
+    "citation_valid", "conflict_detected", "conflict_detection_failed",
+    "human_labels", "evidence_gate", "retrieval_query"
+  ],
+  "properties": {
+    "question_id": { "type": "string", "minLength": 1 },
+    "question": { "type": "string", "minLength": 1 },
+    "category": {
+      "type": "string",
+      "enum": ["direct_factual", "multiple_passages", "multiple_documents", "exceptions_or_effective_dates", "unanswerable", "follow_up", "potential_conflict"]
+    },
+    "split": { "type": "string", "enum": ["development", "validation", "test"] },
+    "cache_key": { "type": "string", "minLength": 1 },
+    "config_fingerprint": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["answered", "abstained", "generation_error", "invalid_response", "request_error"] },
+    "answer": { "type": ["string", "null"] },
+    "retrieved_sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["document_id", "document_name", "page_number", "chunk_id", "citation", "text", "score", "retrieval_method", "diagnostics"],
+        "properties": {
+          "document_id": { "type": "string" },
+          "document_name": { "type": "string" },
+          "page_number": { "type": "integer", "minimum": 1 },
+          "chunk_id": { "type": "string" },
+          "citation": { "type": "string" },
+          "text": { "type": "string" },
+          "score": { "type": "number" },
+          "retrieval_method": { "type": "string", "enum": ["dense", "bm25", "hybrid_rrf"] },
+          "diagnostics": { "type": "object" }
+        }
+      }
+    },
+    "latency_ms": { "type": "number", "minimum": 0 },
+    "request_failed": { "type": "boolean" },
+    "error_code": { "type": ["string", "null"] },
+    "citation_exists": { "type": ["boolean", "null"] },
+    "citation_valid": { "type": ["boolean", "null"] },
+    "conflict_detected": { "type": ["boolean", "null"] },
+    "conflict_detection_failed": { "type": "boolean" },
+    "evidence_gate": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["accepted", "configuration_id", "retrieval_score", "score_kind", "threshold", "reason", "missing_information"],
+      "properties": {
+        "accepted": { "type": "boolean" },
+        "configuration_id": { "type": "string", "minLength": 1 },
+        "retrieval_score": { "type": ["number", "null"] },
+        "score_kind": { "type": "string", "minLength": 1 },
+        "threshold": { "type": "number" },
+        "reason": { "type": "string", "minLength": 1 },
+        "missing_information": { "type": ["string", "null"] }
+      }
+    },
+    "retrieval_query": { "type": ["string", "null"] },
+    "human_labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["answer_correct", "citation_support", "evidence_support", "appropriate_refusal", "reviewer", "reviewed_at", "notes"],
+      "properties": {
+        "answer_correct": { "type": ["boolean", "null"] },
+        "citation_support": { "type": ["boolean", "null"] },
+        "evidence_support": { "type": ["boolean", "null"] },
+        "appropriate_refusal": { "type": ["boolean", "null"] },
+        "reviewer": { "type": ["string", "null"] },
+        "reviewed_at": { "type": ["string", "null"], "format": "date-time" },
+        "notes": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["human_labels"],
+        "properties": {
+          "human_labels": {
+            "anyOf": [
+              { "required": ["answer_correct"], "properties": { "answer_correct": { "type": "boolean" } } },
+              { "required": ["citation_support"], "properties": { "citation_support": { "type": "boolean" } } },
+              { "required": ["evidence_support"], "properties": { "evidence_support": { "type": "boolean" } } },
+              { "required": ["appropriate_refusal"], "properties": { "appropriate_refusal": { "type": "boolean" } } }
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "human_labels": {
+            "properties": {
+              "reviewer": { "type": "string", "minLength": 1 },
+              "reviewed_at": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
