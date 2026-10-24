@@ -1,0 +1,37 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      CAMPUSREG_DB_PATH: /app/data/campusreg.sqlite3
+      CAMPUSREG_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      CAMPUSREG_ENABLE_DEV_EVALUATION: "false"
+      HF_HOME: /model-cache
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - campusreg-data:/app/data
+      - campusreg-model-cache:/model-cache
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CAMPUSREG_API_URL: http://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  campusreg-data:
+  campusreg-model-cache:

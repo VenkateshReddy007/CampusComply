@@ -14,7 +14,7 @@
 
 **CampusReg implements Problem Statement 2A — Campus Regulations Assistant** from the [Hacktoberfest RAG Application with Gemma challenge](https://github.com/mithun-srinivas/HacktoberFest-HackDay/blob/main/problem-statements/02_rag_application.md). Students often need to search long handbooks and regulations spread across multiple documents. CampusReg retrieves passages from PDFs supplied by the user, asks Gemma to answer from those passages, and returns document-and-page citations alongside the actual evidence.
 
-> **Prototype status:** the shared Python RAG core and Colab notebook are present. This repository does not yet include a FastAPI application, a standalone web frontend, or a hosted public demo. No official campus PDFs or reviewed evaluation questions are bundled.
+> **Current status:** the shared Python RAG core, FastAPI backend, and Next.js interface are implemented and covered by synthetic software tests. No official campus PDFs or human-reviewed policy evaluation set are bundled, so policy correctness and production conflict detection remain unmeasured. The API key is supplied by each local operator; no hosted demo is configured.
 
 [Problem statement](https://github.com/mithun-srinivas/HacktoberFest-HackDay/blob/main/problem-statements/02_rag_application.md) · [Architecture](docs/architecture.md) · [Baseline audit](docs/baseline-audit.md) · [Evaluation guide](evaluation/README.md) · [Backend guide](backend/README.md)
 
@@ -49,8 +49,10 @@ The Colab notebook is a lightweight demo client for this shared core. It can lau
 - **Multiple sources persist together.** SQLite stores document metadata, content hashes, pages, chunks, vectors, and conversation history. Duplicate PDF content is detected by hash; delete and re-index operations preserve other documents.
 - **Retrieval choices can be measured.** Dense cosine retrieval remains available as the baseline. BM25 with Reciprocal Rank Fusion can be compared without mixing uncalibrated scores.
 - **Evaluation separates software behavior from policy quality.** The package supports retrieval experiments, paired RAG/no-RAG runs, evidence-gate calibration, follow-up evaluation, and fixed-evidence Gemma comparison. Factual answer and citation-support labels require human review.
+- **Potential conflicts show both sources.** A separate comparison service validates each passage quote, source identity, page, scope excerpt, and date before returning a report. It requires human review and never selects the controlling rule.
+- **The local interface uses the API contract.** The Next.js app uploads PDFs, manages documents and conversations, displays returned answer evidence, checks cross-document differences, and exposes protected development evaluation jobs.
 
-These are engineering choices for this project, not a claim that the approach is the first of its kind. Potentially conflicting policies are represented in the evaluation format, but an end-to-end conflict detector and conflict-resolution workflow are not yet implemented.
+These are project design choices, not a claim that the approach is the first of its kind. Conflict labels are review prompts rather than institutional determinations.
 
 ## Why build this in 2026?
 
@@ -58,14 +60,15 @@ Students already encounter policy information as long PDFs, revised handbooks, a
 
 ## Current scope and limits
 
-| Available in this repository | Not included or not yet measured |
+| Implemented and software-tested | Not included or not yet measured |
 | --- | --- |
-| Shared Python RAG package and two Colab notebooks | FastAPI routes and standalone frontend |
-| PDF text extraction, overlapping word chunks, SentenceTransformer embeddings, dense cosine retrieval | OCR for scanned or image-only PDFs |
-| Multi-PDF SQLite storage with original page metadata, content hashes, duplicate detection, deletion, and re-indexing | Automated policy conflict detection or authority selection |
-| Optional BM25/RRF retrieval and calibrated evidence-gate interfaces | Hosted public demo or production deployment controls |
-| Isolated conversation history with a fresh retrieval step for follow-ups | Official institutional policy corpus and human-reviewed question set |
-| Evaluation framework and mocked software smoke tests | Real benchmark scores for recall, correctness, citations, latency, or model quality |
+| Shared Python RAG package and Colab notebook clients | OCR for scanned or image-only PDFs |
+| PDF extraction, word chunks, SentenceTransformer embeddings, dense and BM25/RRF retrieval | Official institutional PDF corpus and reviewed policy question set |
+| SQLite multi-document storage with physical page metadata, hashes, deletion, and re-indexing | Human-reviewed answer correctness, retrieval, and refusal scores |
+| FastAPI API and Next.js App Router frontend | Production authentication, authorization, tenancy, and deployment hardening |
+| Evidence validation, abstention interfaces, isolated contextual conversations | Independently measured conflict precision/recall on real regulations |
+| Structured potential-conflict reports showing both validated passages | Hosted public demo and real model comparison results |
+| Development evaluation jobs protected by a backend bearer token | Privacy, legal, or DPDP compliance certification |
 
 Similarity and fusion scores are retrieval diagnostics, not calibrated probabilities. The evidence gate needs reviewed validation data and separate calibration for the chosen retrieval configuration. Scanned PDFs are rejected because OCR is not implemented. Treat generated answers as an aid to locating official text, not a replacement for the institution’s authoritative policy or staff guidance.
 
@@ -85,31 +88,71 @@ The shared core preserves the starter notebook’s baseline settings:
 
 Open the [shared-core Colab notebook](https://colab.research.google.com/github/VenkateshReddy007/CampusComply/blob/main/notebooks/02_rag_starter_kit.ipynb) to use the package, or browse the [notebook source](notebooks/02_rag_starter_kit.ipynb). The [baseline reference notebook](notebooks/02_rag_starter_kit_baseline.ipynb) preserves the starter logic for comparison. Notebook outputs are cleared in the committed copies: the original baseline contained token-like output from a secret lookup, so retaining saved runtime output could expose credentials. The synthetic starter sample is labelled as synthetic and is not presented as campus policy.
 
-## Run locally
+## Run the local application
 
-Python 3.11 or newer is required. From the repository root:
+Use Python 3.11+ and Node.js 20.9+. From the repository root:
 
 ```powershell
 python -m pip install -e ".\backend[all]"
-python -m pytest .\backend\tests -q
+cd frontend
+npm install
 ```
 
-For the test-only dependencies, install `.\backend[test]`. For embeddings without the notebook UI, use `backend[embeddings]`. First use of SentenceTransformer downloads model weights.
+In terminal 1, start the API:
 
-Set `GOOGLE_API_KEY` in your local process environment or an ignored `.env` file for Gemma generation. In Colab, add the key to **Secrets** as `GOOGLE_API_KEY` and grant notebook access. The notebook reads it from Colab Secrets; never paste a key into a code cell, notebook output, README, issue, or commit. The provider accepts `GOOGLE_API_KEY`, `GEMMA_API_KEY`, and the legacy Colab secret name `gemma_API_Key`. Copy `.env.example` only for its safe variable names and placeholders.
+```powershell
+$env:CAMPUSREG_CORS_ORIGINS = "http://localhost:3000,http://127.0.0.1:3000"
+python -m uvicorn campusreg.main:app --app-dir backend --host 127.0.0.1 --port 8000
+```
+
+In terminal 2, start the web app with `cd frontend; npm run dev`.
+Open [http://localhost:3000](http://localhost:3000). The API and schema are at
+[http://127.0.0.1:8000](http://127.0.0.1:8000) and
+[/docs](http://127.0.0.1:8000/docs). The frontend reads
+`NEXT_PUBLIC_CAMPUSREG_API_URL`, defaulting to the local API. Set
+`GOOGLE_API_KEY` in the backend process environment for Gemma answers and
+model-assisted conflict reports. Document management works without the key;
+generation-dependent actions return a structured configuration error until
+it is set. The first PDF upload downloads the configured embedding model if it
+is not already cached.
+
+For a clearly synthetic UI exercise, run
+`python scripts/create_synthetic_demo_pdfs.py`; generated files appear in
+`data/synthetic_demo/` and are ignored by Git. They contain invented values
+marked as software fixtures, not campus rules. Never use them for policy
+evaluation. In Colab, add a key to **Secrets**; do not paste credentials into
+source code, notebook output, README, issues, or commits. The provider accepts
+`GOOGLE_API_KEY`, `GEMMA_API_KEY`, and the legacy Colab secret name
+`gemma_API_Key`. Safe variable names and placeholders are in `.env.example`.
 
 Full evaluations are explicit commands and can make model requests. They do not run on import or application startup. The mock smoke tests do not call Gemma. Review [evaluation/README.md](evaluation/README.md) before preparing a real dataset or launching a full run.
 
 ## Results that have actually been measured
 
-The automated software suite was run locally on **24 October 2026**:
+Checks run locally on 2026-10-24. The backend suite passed **81 tests**
+(8.38 seconds; one Starlette pending-deprecation warning). Frontend tests
+passed **5 tests**; lint, type-check, and production build passed. A local API
+smoke check returned HTTP 200 for the web app and API health endpoint. Two
+clearly labelled synthetic PDFs indexed as one page and one chunk each, with
+384-dimensional embeddings. API readiness correctly reported degraded because
+no model API key is configured. See [docs/evaluation-report.md](docs/evaluation-report.md)
+for exact commands and scope. These are software checks, not campus-policy
+accuracy measurements.
 
 ```text
-Command: python -m pytest tests -q   (from backend/)
-Result:  70 passed in 2.86s
+Backend: python -m pytest tests -q              81 passed, 1 warning (8.38s)
+Frontend: npm test                              5 passed
+Frontend: npm run lint                          passed
+Frontend: npm run typecheck                    passed
+Frontend: npm run build                        passed
 ```
 
-These are software tests using synthetic fixtures and mocked model calls. They do not measure campus-policy accuracy. No retrieval benchmark, human-reviewed answer-quality score, or live Gemma comparison is reported because this checkout has no official campus corpus or reviewed question set. The notebook outputs are intentionally empty for credential safety and reproducibility; no model result has been inserted by hand.
+Tests use synthetic fixtures and mocked model calls. They do not measure
+campus-policy accuracy. No retrieval benchmark, human-reviewed answer-quality
+score, real-data conflict precision/recall, or live Gemma comparison is
+reported because this checkout has no official campus corpus or reviewed
+question set. Notebook outputs remain empty for credential safety; no result
+has been inserted by hand.
 
 ## Open source and API-key handling
 
@@ -132,16 +175,17 @@ Those choices reduce unnecessary context sharing, but they do not make the proto
 | <img src="https://github.com/rohan-chand-m-01.png" alt="Rohan Chand M GitHub profile photo" width="72" /> | Rohan Chand M | [@rohan-chand-m-01](https://github.com/rohan-chand-m-01) | [Open the Colab notebook](https://colab.research.google.com/github/VenkateshReddy007/CampusComply/blob/main/notebooks/02_rag_starter_kit.ipynb) |
 | <img src="https://github.com/VenkateshReddy007.png" alt="Venkatesh Reddy K GitHub profile photo" width="72" /> | Venkatesh Reddy K | [@VenkateshReddy007](https://github.com/VenkateshReddy007) | [CampusComply repository](https://github.com/VenkateshReddy007/CampusComply) · [Open the Colab notebook](https://colab.research.google.com/github/VenkateshReddy007/CampusComply/blob/main/notebooks/02_rag_starter_kit.ipynb) |
 
-The notebook is the runnable demo entry point; it requires a user-provided API key and official source PDFs. There is no hosted live demo URL yet.
+The local web interface is the application entry point; question answering and model-assisted conflict checks require a user-provided API key and PDFs from an official source. There is no hosted live demo URL.
 
 ## Repository map
 
 ```text
-backend/campusreg/       shared ingestion, RAG, storage, and evaluation code
-backend/tests/           unit and mocked smoke tests
+backend/campusreg/       shared ingestion, RAG, conflict, storage, API, and evaluation code
+backend/tests/           unit and mocked API integration tests
+frontend/                Next.js App Router, TypeScript, Tailwind, and UI components
 notebooks/               shared-core Colab notebook and baseline reference
 evaluation/              schemas, question template, methodology, result placeholder
-docs/                    baseline audit, architecture, and phase notes
+docs/                    architecture, phase notes, coverage and failure reports
 data/                    local data location; uploaded documents and databases are ignored
 ```
 

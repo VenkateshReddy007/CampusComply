@@ -31,6 +31,30 @@ query-rewriting step can resolve references in a follow-up, after which the
 system retrieves current passages again. Historical assistant answers are
 never included as official evidence in final answer generation.
 
+`ConflictDetector` is a separate core service. Candidate pairs are compared
+through an injected comparator; the Gemma adapter requests a structured
+classification, but the output is only returned after literal quote/scope and
+verified date checks against indexed passages and document metadata. Reports
+carry both source passages and require human review. No authority hierarchy is
+implemented.
+
+## API and frontend
+
+`backend/campusreg/api/app.py` exposes typed FastAPI routes which call the
+shared engine, conversation service, SQLite store, and conflict service. It
+does not contain retrieval or generation algorithms. Uploaded source bytes
+and the database default to `data/campusreg.sqlite3`, outside the package.
+The local API key is read server-side. Development evaluation routes require
+an opt-in flag and backend bearer token. CORS origins are explicit and
+environment-controlled.
+
+`frontend/` is a Next.js App Router client written in TypeScript. Its API
+client models the Pydantic response contracts. Answer text, citations,
+passages, documents, conflicts, and evaluation metrics come from the API; the
+frontend has no production mock answers or sample policy records. Synthetic
+PDFs can be generated locally for software-only checks and are ignored by
+Git.
+
 ## Evaluation
 
 `backend/campusreg/evaluation/` contains reviewed-dataset loading, metrics,
@@ -56,10 +80,11 @@ must be calibrated separately for the embedding, retrieval, chunking, and
 corpus configuration used; score cutoffs are not confidence probabilities.
 
 API credentials are read from process environment and are not written to
-results. OCR, frontend, FastAPI routes, authentication, deployment controls,
-and production retention policies are outside the current implemented scope.
-No official campus corpus or reviewed benchmark dataset is checked in, so no
-campus-policy answer or benchmark result is available from this repository.
+results. OCR, production authentication/authorization, institution tenancy,
+deployment hardening, and retention controls remain outside the implemented
+scope. No official campus corpus or reviewed benchmark dataset is checked in,
+so no campus-policy accuracy or real-data conflict metric is available from
+this repository.
 
 See [the backend guide](../backend/README.md) and phase notes for details on
 [multi-document ingestion](phase-3-multi-document.md),

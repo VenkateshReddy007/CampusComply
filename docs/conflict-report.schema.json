@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://campusreg.example/schemas/conflict-report.schema.json",
+  "title": "CampusReg Conflict Report",
+  "description": "A review-required comparison of two passages from different indexed documents. This schema does not establish authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["subject", "status", "passage_a", "passage_b", "explanation", "scope", "effective_dates", "limitations", "human_review_required"],
+  "properties": {
+    "subject": { "type": "string", "minLength": 1 },
+    "status": {
+      "type": "string",
+      "enum": ["potential_contradiction", "possible_supersession", "different_scopes", "valid_exception", "not_conflicting", "insufficient_evidence"]
+    },
+    "passage_a": { "$ref": "#/$defs/passage" },
+    "passage_b": { "$ref": "#/$defs/passage" },
+    "explanation": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object", "additionalProperties": false, "required": ["passage_a", "passage_b"],
+      "properties": { "passage_a": { "type": ["string", "null"] }, "passage_b": { "type": ["string", "null"] } }
+    },
+    "effective_dates": {
+      "type": "object", "additionalProperties": false, "required": ["passage_a", "passage_b"],
+      "properties": { "passage_a": { "type": ["string", "null"] }, "passage_b": { "type": ["string", "null"] } }
+    },
+    "limitations": { "type": "array", "items": { "type": "string" } },
+    "human_review_required": { "const": true }
+  },
+  "$defs": {
+    "passage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["document_id", "document_name", "page", "chunk_id", "citation", "text"],
+      "properties": {
+        "document_id": { "type": "string", "minLength": 1 },
+        "document_name": { "type": "string", "minLength": 1 },
+        "page": { "type": "integer", "minimum": 1 },
+        "chunk_id": { "type": "string", "minLength": 1 },
+        "citation": { "type": "string", "minLength": 1 },
+        "text": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

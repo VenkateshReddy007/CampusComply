@@ -23,6 +23,15 @@ from campusreg.rag.conversation import (
     GemmaQueryRewriter,
     requires_query_rewrite,
 )
+from campusreg.rag.conflicts import (
+    ConflictAssessment,
+    ConflictDetector,
+    ConflictPassage,
+    ConflictReport,
+    ConflictStatus,
+    GemmaConflictComparator,
+    conflict_metrics,
+)
 from campusreg.rag.models import (
     AnswerResult,
     AnswerStatus,
@@ -41,6 +50,11 @@ __all__ = [
     "AnswerStatus",
     "ConversationRAGService",
     "ConversationTurnResult",
+    "ConflictAssessment",
+    "ConflictDetector",
+    "ConflictPassage",
+    "ConflictReport",
+    "ConflictStatus",
     "DocumentPage",
     "EvidenceGate",
     "EvidenceGateDecision",
@@ -52,6 +66,7 @@ __all__ = [
     "FileTooLargeError",
     "GenerationError",
     "GemmaQueryRewriter",
+    "GemmaConflictComparator",
     "GoogleGenAIProvider",
     "KnowledgeBase",
     "KnowledgeBaseSummary",
@@ -69,6 +84,7 @@ __all__ = [
     "UnsupportedScannedPDFError",
     "answer",
     "build_knowledge_base",
+    "conflict_metrics",
     "generate",
     "read_pdf",
     "requires_query_rewrite",

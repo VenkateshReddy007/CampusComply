@@ -53,6 +53,7 @@ node_modules/
 .next/
 dist/
 build/
+*.tsbuildinfo
 
 # Common OS/editor files
 .DS_Store
