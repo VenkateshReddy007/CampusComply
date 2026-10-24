@@ -54,6 +54,8 @@ class SQLiteDocumentStore:
                     embedding_model TEXT,
                     embedding_dimension INTEGER,
                     last_error_code TEXT,
+                    redaction_summary_json TEXT NOT NULL DEFAULT '{}',
+                    redaction_version INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
@@ -96,9 +98,19 @@ class SQLiteDocumentStore:
                 );
                 CREATE INDEX IF NOT EXISTS conversation_messages_order
                     ON conversation_messages(conversation_id, id);
-                PRAGMA user_version = 2;
+                PRAGMA user_version = 4;
                 """
             )
+            # Upgrade existing local workspaces without replacing their indexes.
+            columns = {row["name"] for row in connection.execute("PRAGMA table_info(documents)")}
+            if "redaction_summary_json" not in columns:
+                connection.execute(
+                    "ALTER TABLE documents ADD COLUMN redaction_summary_json TEXT NOT NULL DEFAULT '{}'"
+                )
+            if "redaction_version" not in columns:
+                connection.execute(
+                    "ALTER TABLE documents ADD COLUMN redaction_version INTEGER NOT NULL DEFAULT 0"
+                )
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -114,6 +126,12 @@ class SQLiteDocumentStore:
     def _record(row: sqlite3.Row | None) -> DocumentRecord | None:
         if row is None:
             return None
+        try:
+            redaction_summary = json.loads(row["redaction_summary_json"])
+        except (json.JSONDecodeError, TypeError, IndexError):
+            redaction_summary = {}
+        if not isinstance(redaction_summary, dict):
+            redaction_summary = {}
         return DocumentRecord(
             id=row["id"],
             filename=row["filename"],
@@ -131,6 +149,8 @@ class SQLiteDocumentStore:
             last_error_code=row["last_error_code"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+            redaction_summary=redaction_summary,
+            redaction_version=row["redaction_version"],
         )
 
     def get_by_hash(self, content_hash: str) -> DocumentRecord | None:
@@ -244,6 +264,7 @@ class SQLiteDocumentStore:
         vectors: np.ndarray,
         *,
         embedding_model: str,
+        redaction_summary: dict[str, Any] | None = None,
     ) -> DocumentRecord:
         """Replace one document's page/chunk index as a single transaction."""
 
@@ -289,8 +310,12 @@ class SQLiteDocumentStore:
             connection.execute(
                 """UPDATE documents SET ingestion_status = 'indexed', page_count = ?,
                     chunk_count = ?, embedding_model = ?, embedding_dimension = ?,
-                    last_error_code = NULL, updated_at = ? WHERE id = ?""",
-                (len(pages), len(chunks), embedding_model, matrix.shape[1], now, document_id),
+                    last_error_code = NULL, redaction_summary_json = ?, redaction_version = 1,
+                    updated_at = ? WHERE id = ?""",
+                (
+                    len(pages), len(chunks), embedding_model, matrix.shape[1],
+                    json.dumps(redaction_summary or {}, sort_keys=True), now, document_id,
+                ),
             )
         record = self.get_document(document_id)
         if record is None:
@@ -301,6 +326,16 @@ class SQLiteDocumentStore:
         """Load all indexed sources into one matrix without losing their identities."""
 
         with self._connect() as connection:
+            stale = connection.execute(
+                """SELECT COUNT(*) FROM documents
+                   WHERE ingestion_status IN ('indexed', 'reindexing') AND redaction_version < 1"""
+            ).fetchone()[0]
+            if stale:
+                from campusreg.rag.errors import PrivacyReindexRequiredError
+
+                raise PrivacyReindexRequiredError(
+                    "One or more stored indexes predate privacy preprocessing. Re-index those documents before asking questions."
+                )
             rows = connection.execute(
                 """SELECT c.*, d.embedding_model FROM chunks c
                    JOIN documents d ON d.id = c.document_id
@@ -347,7 +382,7 @@ class SQLiteDocumentStore:
             rows = connection.execute(
                 """SELECT c.document_id, c.filename, c.page_number, c.chunk_id, c.text
                    FROM chunks c JOIN documents d ON d.id = c.document_id
-                   WHERE d.ingestion_status = 'indexed'
+                   WHERE d.ingestion_status = 'indexed' AND d.redaction_version >= 1
                    ORDER BY d.created_at, d.id, c.ordinal LIMIT ?""",
                 (limit,),
             ).fetchall()

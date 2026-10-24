@@ -20,6 +20,7 @@ from campusreg.rag.errors import (
     PDFParseError,
     UnsupportedScannedPDFError,
 )
+from campusreg.rag.privacy import redact_pages, redact_text
 from campusreg.storage.models import DocumentRecord, IngestionResult
 from campusreg.storage.sqlite_store import SQLiteDocumentStore
 
@@ -49,6 +50,8 @@ class PDFIngestor:
         """Store a new PDF, or return its existing record when the hash repeats."""
 
         self._validate_file(content, filename)
+        # Filenames are also returned to clients and sent in citation prompts.
+        safe_filename, _ = redact_text(filename)
         parsed_date = self._parse_date(effective_date)
         parsed_url = self._parse_url(source_url)
         if not isinstance(document_type, str):
@@ -64,7 +67,7 @@ class PDFIngestor:
         document_id = str(uuid4())
         record, created = self.store.create_uploaded_document(
             document_id=document_id,
-            filename=filename,
+            filename=safe_filename,
             content_hash=content_hash,
             source_url=parsed_url,
             effective_date=parsed_date,
@@ -75,7 +78,7 @@ class PDFIngestor:
             return IngestionResult(document=record, duplicate=True)
         self.store.mark_processing(record.id)
         try:
-            indexed = self._index(record.id, filename, content)
+            indexed = self._index(record.id, safe_filename, content)
         except Exception as exc:
             code = exc.code if isinstance(exc, DocumentIngestionError) else (
                 "empty_document" if isinstance(exc, EmptyDocumentError) else "indexing_failed"
@@ -119,6 +122,9 @@ class PDFIngestor:
             raise PDFParseError() from None
         if not pages or all(not page.text.strip() for page in pages):
             raise UnsupportedScannedPDFError()
+        # The sanitized pages are the canonical representation used by chunking,
+        # local embeddings, SQLite text indexes and every later model prompt.
+        pages, redaction_summary = redact_pages(pages)
         chunks = split_into_chunks(pages, settings=self.settings, document_id=document_id)
         if not chunks:
             raise EmptyDocumentError("Extracted PDF text was too short to index.")
@@ -134,6 +140,7 @@ class PDFIngestor:
             chunks,
             vectors,
             embedding_model=self.settings.embedding_model,
+            redaction_summary=redaction_summary.to_dict(),
         )
 
     def _validate_file(self, content: bytes, filename: str) -> None:

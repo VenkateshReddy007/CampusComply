@@ -40,6 +40,12 @@ export type DocumentRecord = {
   last_error_code: string | null;
   created_at: string;
   updated_at: string;
+  redaction_summary: {
+    counts_by_category?: Record<string, number>;
+    counts_by_page?: Record<string, Record<string, number>>;
+    total?: number;
+  };
+  redaction_version: number;
 };
 
 export type UploadItem = {

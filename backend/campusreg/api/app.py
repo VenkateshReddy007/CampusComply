@@ -26,12 +26,14 @@ from campusreg.rag.errors import (
     GenerationError,
     KnowledgeBaseNotLoadedError,
     MissingAPIConfigurationError,
+    PrivacyReindexRequiredError,
 )
 from campusreg.rag.generation import GoogleGenAIProvider, TextGenerator
 from campusreg.rag.knowledge_graph import build_source_knowledge_graph
 from campusreg.rag.models import AnswerResult, AnswerStatus, RetrievedSource
 from campusreg.rag.pipeline import MultiDocumentRAGEngine
 from campusreg.rag.scope import is_campus_education_question
+from campusreg.rag.guardrails import preflight_request
 from campusreg.storage.models import DocumentRecord
 from campusreg.storage.sqlite_store import SQLiteDocumentStore
 from campusreg.api.schemas import (
@@ -116,6 +118,8 @@ def _document_schema(record: DocumentRecord) -> DocumentSchema:
         page_count=record.page_count, chunk_count=record.chunk_count,
         embedding_model=record.embedding_model, embedding_dimension=record.embedding_dimension,
         last_error_code=record.last_error_code, created_at=record.created_at, updated_at=record.updated_at,
+        redaction_summary=record.redaction_summary,
+        redaction_version=record.redaction_version,
     )
 
 
@@ -291,6 +295,8 @@ def create_app(
             raise HTTPException(404, detail={"code": "document_not_found", "message": "No document has that ID."})
         try:
             kb = engine.store.load_knowledge_base()
+        except PrivacyReindexRequiredError as exc:
+            raise HTTPException(409, detail={"code": "privacy_reindex_required", "message": str(exc)}) from None
         except KnowledgeBaseNotLoadedError:
             raise HTTPException(404, detail={"code": "evidence_not_found", "message": "No indexed evidence is available."}) from None
         for chunk in kb.chunks:
@@ -302,20 +308,29 @@ def create_app(
     def knowledge_graph() -> KnowledgeGraphSchema:
         """Return bounded, source-linked document/page/passage relationships."""
 
-        chunks = service_from_scope().engine.store.list_source_graph_chunks(limit=501)
+        engine = service_from_scope().engine
+        if any(
+            record.redaction_version < 1 and record.ingestion_status.value in {"indexed", "reindexing"}
+            for record in engine.list_documents()
+        ):
+            raise HTTPException(409, detail={"code": "privacy_reindex_required", "message": "Re-index older sources before exposing their passage graph."})
+        chunks = engine.store.list_source_graph_chunks(limit=501)
         graph = build_source_knowledge_graph(chunks, max_passages=500)
         return KnowledgeGraphSchema(**graph)
 
     @application.post("/api/questions", response_model=QuestionResponse, tags=["questions"])
     def ask_question(request: QuestionRequest) -> Any:
         selected = service_from_scope()
-        if is_campus_education_question(request.question):
+        decision = preflight_request(request.question)
+        if is_campus_education_question(request.question) and not decision.blocked:
             require_model_key(selected)
         try:
             result = selected.engine.answer(request.question)
             response = _question_response(result)
         except _QuestionError as exc:
             return JSONResponse(status_code=503 if exc.response.status == "generation_error" else 502, content=exc.response.model_dump())
+        except PrivacyReindexRequiredError as exc:
+            raise HTTPException(409, detail={"code": "privacy_reindex_required", "message": str(exc)}) from None
         except KnowledgeBaseNotLoadedError:
             raise HTTPException(409, detail={"code": "no_indexed_documents", "message": "Upload an official, text-based PDF before asking questions."}) from None
         return response
@@ -326,6 +341,8 @@ def create_app(
         require_model_key(selected)
         try:
             kb = selected.engine.store.load_knowledge_base()
+        except PrivacyReindexRequiredError as exc:
+            raise HTTPException(409, detail={"code": "privacy_reindex_required", "message": str(exc)}) from None
         except KnowledgeBaseNotLoadedError:
             raise HTTPException(409, detail={"code": "no_indexed_documents", "message": "Index documents before checking cross-document conflicts."}) from None
         sources = [RetrievedSource(
@@ -364,7 +381,10 @@ def create_app(
     def ask_conversation(conversation_id: str, request: QuestionRequest) -> Any:
         selected = service_from_scope()
         try:
-            if selected.conversations.is_in_scope(conversation_id, request.question):
+            if (
+                selected.conversations.is_in_scope(conversation_id, request.question)
+                and not preflight_request(request.question).blocked
+            ):
                 require_model_key(selected)
             turn = selected.conversations.ask(conversation_id, request.question)
         except KeyError:

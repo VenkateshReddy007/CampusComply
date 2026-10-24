@@ -36,6 +36,8 @@ const indexedFixture: DocumentRecord = {
   source_url: null, effective_date: null, document_type: "unknown", upload_status: "stored",
   ingestion_status: "indexed", size_bytes: 100, page_count: 1, chunk_count: 1,
   embedding_model: "fixture-model", embedding_dimension: 2, last_error_code: null,
+  redaction_summary: { counts_by_category: {}, counts_by_page: {}, total: 0 },
+  redaction_version: 1,
   created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
 };
 
@@ -107,5 +109,23 @@ describe("CampusReg workspace", () => {
     expect(await screen.findByText("Source-backed passage excerpt.")).toBeInTheDocument();
     expect(screen.getByText(/\[policy-fixture\.pdf, document doc, p\. 1\]/)).toBeInTheDocument();
     expect(screen.getByText("Connections show document provenance only.")).toBeInTheDocument();
+  });
+
+  it("shows only redaction categories, counts and source pages", async () => {
+    vi.mocked(api.listDocuments).mockResolvedValue([{
+      ...indexedFixture,
+      redaction_summary: {
+        counts_by_category: { EMAIL: 1, STUDENT_ID: 1 },
+        counts_by_page: { "2": { EMAIL: 1, STUDENT_ID: 1 } },
+        total: 2,
+      },
+    }]);
+    render(<HomePage />);
+    await screen.findByRole("heading", { name: "Start with an official source" });
+    fireEvent.click(screen.getByRole("button", { name: /Regulations/ }));
+
+    expect(await screen.findByText(/Privacy preprocessing · 2 replacements/)).toBeInTheDocument();
+    expect(screen.getByText(/EMAIL: 1 · STUDENT_ID: 1 · PDF page 2/)).toBeInTheDocument();
+    expect(screen.queryByText(/Jane Doe|jane@example\.edu|S123456/)).not.toBeInTheDocument();
   });
 });

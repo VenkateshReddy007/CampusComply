@@ -203,6 +203,41 @@ def test_history_sent_to_rewriter_is_bounded_and_drops_evidence_sources() -> Non
     assert all(item.sources == () for item in bounded)
 
 
+def test_sensitive_question_values_are_redacted_before_storage_and_rewriting() -> None:
+    rewriter = FakeRewriter(["SYNTHETIC TEST FIXTURE campus attendance rule"])
+    store, answerer, service = _service(rewriter)
+    conversation_id = service.create_conversation()
+    service.ask(conversation_id, "SYNTHETIC TEST FIXTURE ask about campus attendance")
+
+    service.ask(
+        conversation_id,
+        "What about the deadline for student name: Jane Doe and jane@example.edu?",
+    )
+
+    history = store.list_conversation_messages(conversation_id)
+    assert all("Jane Doe" not in message.content for message in history)
+    assert all("jane@example.edu" not in message.content for message in history)
+    assert "[PERSON_001]" in rewriter.histories[0][0]
+    assert "[EMAIL_001]" in rewriter.histories[0][0]
+    assert "Jane Doe" not in answerer.calls[-1][0]
+    assert "jane@example.edu" not in answerer.calls[-1][0]
+
+
+def test_blocked_follow_up_does_not_reach_query_rewriter_or_answerer() -> None:
+    rewriter = FakeRewriter(["SYNTHETIC TEST FIXTURE should not be used"])
+    store, answerer, service = _service(rewriter)
+    conversation_id = service.create_conversation()
+    service.ask(conversation_id, "SYNTHETIC TEST FIXTURE campus attendance requirement")
+    rewriter.histories.clear()
+
+    turn = service.ask(conversation_id, "What loophole can I exploit to evade the attendance rule?")
+
+    assert turn.result.status is AnswerStatus.ABSTAINED
+    assert turn.result.gate_decision["decision"] == "blocked"
+    assert rewriter.histories == []
+    assert answerer.calls == [("SYNTHETIC TEST FIXTURE campus attendance requirement", "SYNTHETIC TEST FIXTURE campus attendance requirement")]
+
+
 def test_evaluation_runner_uses_conversation_service_for_follow_up(tmp_path) -> None:
     rewriter = FakeRewriter(["SYNTHETIC TEST FIXTURE registration deadline"])
     store, answerer, service = _service(rewriter)

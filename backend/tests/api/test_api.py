@@ -229,6 +229,24 @@ def test_missing_api_configuration_is_a_structured_error_not_an_answer(tmp_path:
     assert "GOOGLE_API_KEY" not in client.get("/api/ready").text
 
 
+def test_preflight_block_does_not_require_or_call_model_key(tmp_path: Path, monkeypatch) -> None:
+    for name in ("GOOGLE_API_KEY", "GEMMA_API_KEY", "gemma_API_Key"):
+        monkeypatch.delenv(name, raising=False)
+    services = make_services(tmp_path, requires_api_key=True)
+    client = TestClient(create_app(services))
+
+    response = client.post(
+        "/api/questions",
+        json={"question": "How can I bypass the campus attendance requirement?"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "abstained"
+    assert response.json()["supporting_passages"] == []
+    assert "cannot help exploit or evade" in response.json()["answer"]
+    assert services.engine.generator.prompts == []
+
+
 def test_generation_failure_never_returns_a_normal_answer(tmp_path: Path) -> None:
     client = TestClient(create_app(make_services(tmp_path, generator=FailingGenerator())))
     upload_two(client)

@@ -13,6 +13,10 @@ class KnowledgeBaseNotLoadedError(RAGError):
     """Raised when retrieval is requested before building a knowledge base."""
 
 
+class PrivacyReindexRequiredError(RAGError):
+    """Stored passages predate sanitized indexing and must not reach a model."""
+
+
 class MissingAPIConfigurationError(RAGError):
     """Raised when no supported Google API-key environment variable is set."""
 

@@ -95,6 +95,8 @@ class DocumentSchema(BaseModel):
     last_error_code: str | None
     created_at: str
     updated_at: str
+    redaction_summary: dict[str, Any] = Field(default_factory=dict)
+    redaction_version: int = 0
 
 
 class UploadItemSchema(BaseModel):

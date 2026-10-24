@@ -20,6 +20,7 @@ from campusreg.rag.embeddings import (
 )
 from campusreg.rag.errors import EmptyDocumentError
 from campusreg.rag.models import DocumentPage, KnowledgeBase, RetrievedSource
+from campusreg.rag.privacy import redact_pages, redact_text
 
 _TOKEN_RE = re.compile(r"[\w]+", re.UNICODE)
 BM25_K1 = 1.5
@@ -45,8 +46,14 @@ def build_knowledge_base(
         (page.document_id for page in pages if isinstance(page, DocumentPage) and page.document_id),
         str(uuid4()),
     )
+    safe_pages, _ = redact_pages(
+        tuple(
+            page if isinstance(page, DocumentPage) else DocumentPage(index, page, name, selected_document_id)
+            for index, page in enumerate(pages, start=1)
+        )
+    )
     chunks = split_into_chunks(
-        pages,
+        safe_pages,
         settings=selected,
         source_name=name,
         document_id=selected_document_id,
@@ -77,6 +84,7 @@ def retrieve(
     threshold = selected.relevance_threshold if relevance_threshold is None else relevance_threshold
     if limit <= 0:
         raise ValueError("top_k must be greater than zero")
+    question, _ = redact_text(question)
     if not question.strip():
         raise ValueError("question must not be empty")
 
@@ -120,6 +128,7 @@ def retrieve_bm25(
     candidates = selected.candidate_count if candidate_count is None else candidate_count
     if limit <= 0 or candidates <= 0:
         raise ValueError("top_k and candidate_count must be positive")
+    question, _ = redact_text(question)
     if not question.strip():
         raise ValueError("question must not be empty")
     query_terms = _tokens(question)

@@ -12,6 +12,8 @@ from campusreg.rag.errors import GenerationError
 from campusreg.rag.generation import TextGenerator, generate
 from campusreg.rag.models import AnswerResult, AnswerStatus, ErrorInfo, RetrievedSource
 from campusreg.rag.scope import is_campus_education_question
+from campusreg.rag.privacy import RedactionSession, redact_text
+from campusreg.rag.guardrails import preflight_request
 from campusreg.storage.models import ConversationMessage
 from campusreg.storage.sqlite_store import SQLiteDocumentStore
 
@@ -52,7 +54,11 @@ class GemmaQueryRewriter:
         self.settings = settings
 
     def rewrite(self, question: str, history: Sequence[ConversationMessage]) -> str | None:
-        transcript = "\n".join(f"{message.role.title()}: {message.content}" for message in history)
+        question, _ = redact_text(question)
+        session = RedactionSession()
+        transcript = "\n".join(
+            f"{message.role.title()}: {session.redact(message.content)[0]}" for message in history
+        )
         prompt = f"Conversation history (reference context only):\n{transcript}\n\nCurrent question:\n{question}"
         try:
             rewritten = generate(
@@ -93,10 +99,12 @@ def _bounded_history(
     selected = list(history[-max_messages:])
     remaining = max_chars
     bounded: list[ConversationMessage] = []
+    session = RedactionSession()
     for message in reversed(selected):
         if remaining <= 0:
             break
         content = message.content[-remaining:]
+        content, _ = session.redact(content)
         remaining -= len(content)
         bounded.append(
             ConversationMessage(
@@ -153,7 +161,9 @@ class ConversationRAGService:
         return self.store.delete_conversation(conversation_id)
 
     def ask(self, conversation_id: str, question: str) -> ConversationTurnResult:
-        original = question.strip()
+        # Store and process only a sanitized form of the question. The raw
+        # request remains transient in this call and is never sent to a model.
+        original, _ = redact_text(question.strip())
         if not original:
             raise ValueError("question must not be empty")
         history = self.store.list_conversation_messages(conversation_id)
@@ -163,6 +173,20 @@ class ConversationRAGService:
             content=original,
             original_question=original,
         )
+        guardrail = preflight_request(original)
+        if guardrail.blocked:
+            result = AnswerResult(
+                status=AnswerStatus.ABSTAINED,
+                answer=guardrail.message,
+                sources=(),
+                gate_decision={"decision": "blocked", "reason_code": guardrail.reason_code},
+                retrieval_query=original,
+            )
+            assistant = self._store_assistant(conversation_id, original, original, result)
+            return ConversationTurnResult(
+                conversation_id, original, original, False,
+                result, user_message.id, assistant.id,
+            )
         follow_up = requires_query_rewrite(original)
         if follow_up and not history:
             result = self._clarification_result()

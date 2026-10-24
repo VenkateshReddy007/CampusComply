@@ -417,7 +417,7 @@ export default function HomePage() {
                 <div className="upload-icon"><Upload size={17} /></div><div><strong>Drop PDF files here</strong><span>Text-based PDFs, up to 20 MB each. Scanned PDFs need OCR and are not indexed.</span></div><Button variant="secondary" size="sm" onClick={() => fileRef.current?.click()}>Browse files</Button>
               </div>
               {uploadState && <div className="upload-status" aria-live="polite">{uploadState.includes("…") ? <LoaderCircle size={15} className="spin" /> : <Check size={15} />}{uploadState}</div>}
-              {!!uploadResults.length && <div className="upload-results">{uploadResults.map((item, index) => <div className={`upload-result ${item.status}`} key={`${item.filename}-${index}`}><span>{item.status === "indexed" ? <Check size={15} /> : <AlertCircle size={15} />}</span><div><strong>{item.filename}</strong><p>{item.error?.message || (item.duplicate ? "Duplicate content detected; existing index reused." : `${item.document?.page_count ?? 0} pages indexed`)}</p></div></div>)}</div>}
+              {!!uploadResults.length && <div className="upload-results">{uploadResults.map((item, index) => <div className={`upload-result ${item.status}`} key={`${item.filename}-${index}`}><span>{item.status === "indexed" ? <Check size={15} /> : <AlertCircle size={15} />}</span><div><strong>{item.filename}</strong><p>{item.error?.message || (item.duplicate ? "Duplicate content detected; existing index reused." : `${item.document?.page_count ?? 0} pages indexed`)}</p>{item.document && <RedactionSummaryLabel document={item.document} />}</div></div>)}</div>}
               <div className="list-heading"><div><h2>Indexed sources</h2><span>{documents.length} document{documents.length === 1 ? "" : "s"}</span></div><div className="filter-input"><Search size={15} /><Input aria-label="Filter documents" placeholder="Filter documents" value={documentFilter} onChange={(event) => setDocumentFilter(event.target.value)} /></div></div>
               <div className="document-list">
                 {visibleDocuments.length ? visibleDocuments.map((record) => <DocumentRow key={record.id} record={record} onDelete={() => void deleteDocument(record)} onReindex={() => void reindexDocument(record)} />) : <div className="list-empty">{documents.length ? "No documents match this filter." : "No documents are indexed yet."}</div>}
@@ -463,10 +463,22 @@ function DocumentRow({ record, onDelete, onReindex }: { record: DocumentRecord; 
   return (
     <article className="document-row">
       <div className="document-type-icon"><FileText size={18} /></div>
-      <div className="document-main"><div className="document-name-line"><strong>{record.filename}</strong><Badge className={`status-badge ${record.ingestion_status}`}>{record.ingestion_status}</Badge>{fixture && <Badge className="fixture-label">Synthetic fixture · not policy</Badge>}</div><p>{record.document_type} · {formatBytes(record.size_bytes)} · {record.page_count} pages · {record.chunk_count} passages</p><span className="document-detail">Added {new Date(record.created_at).toLocaleDateString()} · SHA-256 {record.content_hash.slice(0, 12)}</span></div>
+      <div className="document-main"><div className="document-name-line"><strong>{record.filename}</strong><Badge className={`status-badge ${record.ingestion_status}`}>{record.ingestion_status}</Badge>{record.redaction_version < 1 && <Badge className="status-badge failed">Re-index required</Badge>}{fixture && <Badge className="fixture-label">Synthetic fixture · not policy</Badge>}</div><p>{record.document_type} · {formatBytes(record.size_bytes)} · {record.page_count} pages · {record.chunk_count} passages</p><span className="document-detail">Added {new Date(record.created_at).toLocaleDateString()} · SHA-256 {record.content_hash.slice(0, 12)}</span><RedactionSummaryLabel document={record} /></div>
       <div className="document-actions"><Button variant="ghost" size="icon" title="Re-index document" aria-label={`Re-index ${record.filename}`} onClick={onReindex}><RefreshCw size={15} /></Button><Button variant="ghost" size="icon" title="Delete document" aria-label={`Delete ${record.filename}`} onClick={onDelete}><Trash2 size={15} /></Button></div>
     </article>
   );
+}
+
+function RedactionSummaryLabel({ document }: { document: DocumentRecord }) {
+  if (document.redaction_version < 1) return <span className="document-detail privacy-summary">Privacy preprocessing has not run · re-index before asking questions</span>;
+  const summary = document.redaction_summary;
+  const total = summary?.total ?? 0;
+  if (!total) return <span className="document-detail privacy-summary">Privacy preprocessing · no supported labelled fields detected</span>;
+  const categories = Object.entries(summary.counts_by_category ?? {})
+    .filter(([, count]) => Number.isFinite(count) && count > 0)
+    .map(([category, count]) => `${category}: ${count}`);
+  const pages = Object.keys(summary.counts_by_page ?? {}).sort((a, b) => Number(a) - Number(b));
+  return <span className="document-detail privacy-summary">Privacy preprocessing · {total} replacement{total === 1 ? "" : "s"}{categories.length ? ` · ${categories.join(" · ")}` : ""}{pages.length ? ` · PDF page${pages.length === 1 ? "" : "s"} ${pages.join(", ")}` : ""}</span>;
 }
 
 function KnowledgeGraphView({ graph, loading, error }: { graph: KnowledgeGraph | null; loading: boolean; error: string }) {

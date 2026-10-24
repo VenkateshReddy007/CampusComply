@@ -38,6 +38,8 @@ class DocumentRecord:
     last_error_code: str | None
     created_at: str
     updated_at: str
+    redaction_summary: dict[str, Any] = field(default_factory=dict)
+    redaction_version: int = 0
 
 
 @dataclass(frozen=True, slots=True)
